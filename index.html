@@ -114,6 +114,7 @@
         <a href="#/team"><span class="ico">👥</span> ทีม</a>
       </nav>
       <div style="position:absolute;bottom:16px;left:12px;right:12px">
+        <div id="teamSwitchWrap" style="margin-bottom:8px"></div>
         <div class="muted" id="whoami" style="font-size:12px;padding:0 12px 8px"></div>
         <button class="btn-ghost btn-sm" style="width:100%" id="btnLogout">ออกจากระบบ</button>
       </div>
@@ -222,7 +223,35 @@ async function loadContext(){
     const {data:fees}=await sb.from('fee_settings').select('*').eq('team_id',prof.team_id).maybeSingle();
     state.fees=fees;
   }else{ state.team=null; }
+  const {data:myTeams}=await sb.from('teams').select('*').eq('owner_id',uid).order('created_at');
+  state.myTeams=myTeams||[];
   $("#whoami").textContent=(prof?.full_name||'')+' · '+(state.team?.name||'');
+  renderTeamSwitch();
+}
+// ตัวสลับ/สร้างทีม (ร้าน) ในแถบซ้าย
+function renderTeamSwitch(){
+  const wrap=$("#teamSwitchWrap"); if(!wrap)return;
+  const ts=state.myTeams||[];
+  wrap.innerHTML=`<label style="font-size:10px;color:var(--muted);margin:0 0 3px;display:block">🏪 ทีม/ร้าน</label>
+    <select id="teamSwitch" style="padding:7px 8px;font-size:13px">
+      ${ts.map(t=>`<option value="${t.id}" ${t.id===state.team?.id?'selected':''}>${esc(t.name)}</option>`).join('')}
+      <option value="__new__">＋ สร้างทีมใหม่…</option>
+    </select>`;
+  $("#teamSwitch").onchange=async(e)=>{
+    const v=e.target.value, uid=state.session.user.id;
+    if(v==='__new__'){
+      const name=(prompt('ชื่อทีม/ร้านใหม่:')||'').trim();
+      if(!name){renderTeamSwitch();return;}
+      const {data:t,error}=await sb.from('teams').insert({name,owner_id:uid}).select().single();
+      if(error){toast(translate(error.message),false);renderTeamSwitch();return;}
+      await sb.from('profiles').update({team_id:t.id,role:'owner'}).eq('id',uid);
+      await sb.from('fee_settings').insert({team_id:t.id});
+      toast('สร้างทีม '+t.name+' แล้ว');
+    }else{
+      await sb.from('profiles').update({team_id:v}).eq('id',uid);
+    }
+    await loadContext(); location.hash='#/dashboard'; route();
+  };
 }
 
 /* ============================================================
@@ -273,7 +302,7 @@ const routes={
   '/dashboard':renderDashboard,'/orders':renderOrders,'/import':renderImport,
   '/products':renderProducts,'/expenses':renderExpenses,'/team':renderTeam,
 };
-const EXP_SUGGEST=['กล่อง','เทปกาว','บับเบิ้ล','ซองไปรษณีย์','สติกเกอร์/ใบปะหน้า','Ads TikTok (ยิงแอด)','ค่าการตลาด/โฆษณา','อุปกรณ์/เครื่องมือ','ขนส่งเข้าคลัง','อื่นๆ'];
+const EXP_SUGGEST=['ต้นทุนสินค้า','กล่อง','เทปกาว','บับเบิ้ล','ซองไปรษณีย์','สติกเกอร์/ใบปะหน้า','Ads TikTok (ยิงแอด)','ค่าการตลาด/โฆษณา','อุปกรณ์/เครื่องมือ','ขนส่งเข้าคลัง','อื่นๆ'];
 // บัญชีดำ SKU ที่เลิกขาย (ถ้วยมัทฉะ) — import แล้วข้ามอัตโนมัติ ไม่ให้เด้งกลับ
 const IGNORE_SKUS=new Set(['1736486158782465330','1736213839117518130','1736486158782596402','1736213839117583666','1736492816295429426','1736492816295560498','1736492816295626034','1736492816295691570']);
 function route(){
@@ -294,7 +323,7 @@ async function renderDashboard(){
   ]);
   const o=orders||[];
   const sum=k=>o.reduce((a,r)=>a+Number(r[k]||0),0);
-  const sales=sum('gross_sales'), profit=sum('net_profit');
+  const sales=sum('gross_sales'), profit=sum('net_profit')+sum('product_cost'); // ไม่รวมต้นทุนสินค้า (กอล์ฟกรอกเองในค่าใช้จ่าย)
   const feesTotal=sum('commission_fee')+sum('transaction_fee')+sum('affiliate_fee')+sum('growth_fee')+sum('infra_fee')+sum('cod_fee')+sum('shipping_fee')+sum('vat_amount')+sum('other_fee'); // fee TikTok (ไม่รวมค่าโฆษณา)
   const gmvTotal=sum('ads_cost');                                      // ค่าโฆษณา GMV Max จากไฟล์การเงิน
   const cogs=sum('product_cost');
@@ -323,11 +352,10 @@ async function renderDashboard(){
     <span class="muted">${orderCount} ออเดอร์</span></div>
   <div class="stat-grid">
     <div class="card stat"><div class="k">1 · ยอดขายรวม</div><div class="v">${baht(sales)}</div></div>
-    <div class="card stat"><div class="k">2 · กำไรก่อนหักค่าใช้จ่าย<br/><span style="font-size:10px">หลังหัก fee + ต้นทุน</span></div><div class="v ${grossBeforeOpex>=0?'pos':'neg'}" style="font-size:21px">${baht(grossBeforeOpex)}</div></div>
+    <div class="card stat"><div class="k">2 · กำไรก่อนหักค่าใช้จ่าย<br/><span style="font-size:10px">หลังหัก fee (ไม่รวมต้นทุนสินค้า)</span></div><div class="v ${grossBeforeOpex>=0?'pos':'neg'}" style="font-size:21px">${baht(grossBeforeOpex)}</div></div>
     <div class="card stat" style="border-color:${finalNet>=0?'var(--green)':'var(--red)'}"><div class="k">3 · กำไรสุทธิสุดท้าย</div><div class="v ${finalNet>=0?'pos':'neg'}">${baht(finalNet)}</div><div class="k" style="margin-top:4px">margin ${num(margin)}%</div></div>
     <div class="card stat"><div class="k">4 · ค่าธรรมเนียม TikTok</div><div class="v" style="color:var(--amber);font-size:20px">${baht(feesTotal)}</div></div>
-    <div class="card stat"><div class="k">5 · ต้นทุนสินค้า</div><div class="v" style="font-size:20px">${baht(cogs)}</div></div>
-    <div class="card stat"><div class="k">6 · ค่าใช้จ่าย<br/><span style="font-size:10px">รวม GMV Max + โฆษณา + กล่อง/เทป</span></div><div class="v" style="color:var(--amber);font-size:20px">${baht(allExpenses)}</div></div>
+    <div class="card stat"><div class="k">5 · ค่าใช้จ่าย<br/><span style="font-size:10px">รวมต้นทุนสินค้า + GMV + โฆษณา + กล่อง/เทป</span></div><div class="v" style="color:var(--amber);font-size:20px">${baht(allExpenses)}</div></div>
     <div class="card stat" style="border-color:var(--brand)"><div class="k">💰 เงินเข้าจริง (payout)<br/><span style="font-size:10px">${paidCount} ออเดอร์</span></div><div class="v" style="color:var(--brand);font-size:20px">${baht(paidReceived)}</div></div>
   </div>
   <div class="grid" style="grid-template-columns:1.5fr 1fr">
@@ -691,7 +719,7 @@ async function parseIncome(ws,filename,ordersRows){
       o.cost+=(costBySku[sku]||0)*q; o.qty+=q; if(q>o.domQ){o.domQ=q;o.domSku=sku;}
       if(!o.ct){const cm=cleanVal(r['Created Time']).match(/(\d{2})\/(\d{2})\/(\d{4})\s+([\d:]+)/);if(cm)o.ct=`${cm[3]}-${cm[2]}-${cm[1]} ${cm[4]}`;}});
   }
-  const parsed=[];
+  const parsed=[]; const skippedSku={};   // เก็บ SKU ที่ไม่มีสินค้าในทีมนี้ (ไม่ถูกนำเข้า)
   rows.forEach(r=>{
     const type=cleanVal(r[H.type]); if(!type)return;
     const isGmv=/GMV/.test(type)&&!/คำสั่งซื้อ/.test(type);
@@ -713,7 +741,7 @@ async function parseIncome(ws,filename,ordersRows){
         if(byPrice[rev]){hit=byPrice[rev].cost;pr=rev;} else{for(const p of priceList){if(rev>=p&&rev%p===0){hit=byPrice[p].cost*(rev/p);pr=p;break;}}}
         if(hit!=null){cost=hit;pname=priceName(pr);} }
     }
-    if(sku&&IGNORE_SKUS.has(String(sku)))return;   // ข้ามถ้วยมัทฉะ (เลิกขาย) ไม่รับเข้าระบบ
+    if(sku&&costBySku[String(sku)]==null){skippedSku[String(sku)]=(skippedSku[String(sku)]||0)+1;return;}   // นำเข้าเฉพาะสินค้าของทีมนี้ + จด SKU ที่ยังไม่มีสินค้า
     parsed.push({source:'income',order_no:oid||null,order_date:parseDate(r[H.date]),paid_date:parseDate(r[H.paid]),
       created_time:(orderMap&&orderMap[oid]?orderMap[oid].ct:null),sku,product_name:pname,qty,
       gross_sales:rev,product_cost:cost,commission_fee:comm,transaction_fee:tr,affiliate_fee:aff,growth_fee:gr,infra_fee:inf,
@@ -721,7 +749,7 @@ async function parseIncome(ws,filename,ordersRows){
   });
   const existing=await existingOrderNos();
   const dupCount=parsed.filter(r=>r.order_no&&existing.has(String(r.order_no))).length;
-  window._parsed=parsed; importMeta={isIncome:true,filename,hasOrders:!!orderMap,joined,dupCount,newCount:parsed.length-dupCount};
+  window._parsed=parsed; importMeta={isIncome:true,filename,hasOrders:!!orderMap,joined,dupCount,newCount:parsed.length-dupCount,skippedSku};
   renderIncomePreview(parsed,filename);
 }
 function renderIncomePreview(parsed,filename){
@@ -736,7 +764,8 @@ function renderIncomePreview(parsed,filename){
     <b style="color:var(--brand)">✅ ตรวจพบไฟล์ Income (การเงิน TikTok)</b>
     <p class="muted" style="font-size:12px;margin-top:4px">ใช้ fee จริงทุกตัวรายออเดอร์ · ${orders.length} ออเดอร์ + ค่าโฆษณา GMV ${ads.length} รายการ · reconcile ตรงเงินเข้าจริง</p>
     <p style="font-size:12px;margin-top:6px;color:${importMeta.hasOrders?'var(--green)':'var(--amber)'}">${importMeta.hasOrders?`🔗 จับคู่ไฟล์ Orders แล้ว — ได้ SKU/ต้นทุนจริง ${importMeta.joined} ออเดอร์ (แม่น 100%)`:'⚠️ ไม่ได้แนบไฟล์ Orders — ระบบเดาต้นทุนจากราคาขาย (แม่น ~96%) แนะนำอัปไฟล์ Orders คู่มาด้วยเพื่อความเป๊ะ'}</p>
-    <p style="font-size:12px;margin-top:4px;color:var(--brand)">⚡ นำเข้าเฉพาะส่วนใหม่: <b>${importMeta.newCount} รายการใหม่</b>${importMeta.dupCount?` · ข้ามที่มีอยู่แล้ว ${importMeta.dupCount} รายการ (ของเก่า + ติ๊กรับเงินคงไว้)`:' · ไม่มีข้อมูลซ้ำ'}</p>
+    <p style="font-size:12px;margin-top:4px;color:var(--brand)">⚡ นำเข้าเฉพาะส่วนใหม่: <b>${importMeta.newCount} รายการใหม่</b>${importMeta.dupCount?` · ข้ามที่มีอยู่แล้ว ${importMeta.dupCount} รายการ`:' · ไม่มีข้อมูลซ้ำ'}</p>
+    ${importMeta.skippedSku&&Object.keys(importMeta.skippedSku).length?`<p style="font-size:12px;margin-top:4px;color:var(--red)">⚠️ พบ SKU ที่ยังไม่มีสินค้าในทีมนี้ (${Object.values(importMeta.skippedSku).reduce((a,b)=>a+b,0)} ออเดอร์ ไม่ถูกนำเข้า) — ถ้าเป็นสินค้าใหม่ ไปเพิ่มในหน้า "สินค้า" ด้วย SKU นี้ก่อน แล้ว import ซ้ำ:<br/>${Object.entries(importMeta.skippedSku).slice(0,8).map(([s,n])=>esc(s)+' ('+n+')').join(' · ')}</p>`:''}
   </div>
   <div class="card">
     <div class="stat-grid" style="margin-bottom:12px">

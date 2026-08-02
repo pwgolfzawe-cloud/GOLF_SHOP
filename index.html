@@ -305,8 +305,8 @@ async function renderDashboard(){
   const grossBeforeOpex=profit+gmvTotal;                              // กำไรก่อนหักค่าใช้จ่าย = ยอดขาย − fee − ต้นทุน
   const finalNet=profit-adsExp-opexNonAd;                             // กำไรสุทธิสุดท้าย = grossBeforeOpex − allExpenses
   const margin= sales? (finalNet/sales*100):0;
-  const paidReceived=o.filter(r=>r.paid).reduce((a,r)=>a+Number(r.net_profit||0)+Number(r.product_cost||0),0); // เงินเข้าจริงที่ติ๊กแล้ว
-  const paidCount=o.filter(r=>r.paid).length;
+  const paidReceived=o.filter(r=>r.source!=='gmv_ad').reduce((a,r)=>a+Number(r.net_profit||0)+Number(r.product_cost||0),0); // เงินเข้าจริงรวม (payout)
+  const paidCount=o.filter(r=>r.source!=='gmv_ad').length;
   const orderCount=o.length;
 
   // group by date
@@ -328,7 +328,7 @@ async function renderDashboard(){
     <div class="card stat"><div class="k">4 · ค่าธรรมเนียม TikTok</div><div class="v" style="color:var(--amber);font-size:20px">${baht(feesTotal)}</div></div>
     <div class="card stat"><div class="k">5 · ต้นทุนสินค้า</div><div class="v" style="font-size:20px">${baht(cogs)}</div></div>
     <div class="card stat"><div class="k">6 · ค่าใช้จ่าย<br/><span style="font-size:10px">รวม GMV Max + โฆษณา + กล่อง/เทป</span></div><div class="v" style="color:var(--amber);font-size:20px">${baht(allExpenses)}</div></div>
-    <div class="card stat" style="border-color:var(--brand)"><div class="k">💰 ได้รับเงินจริงแล้ว<br/><span style="font-size:10px">${paidCount}/${orderCount} ออเดอร์ที่ติ๊ก</span></div><div class="v" style="color:var(--brand);font-size:20px">${baht(paidReceived)}</div></div>
+    <div class="card stat" style="border-color:var(--brand)"><div class="k">💰 เงินเข้าจริง (payout)<br/><span style="font-size:10px">${paidCount} ออเดอร์</span></div><div class="v" style="color:var(--brand);font-size:20px">${baht(paidReceived)}</div></div>
   </div>
   <div class="grid" style="grid-template-columns:1.5fr 1fr">
     <div class="card"><b>ยอดขาย vs กำไร รายวัน</b><canvas id="chart" height="140" style="margin-top:12px"></canvas></div>
@@ -382,14 +382,11 @@ async function renderOrders(){
   const o=orders||[];
   const payoutOf=r=>Number(r.net_profit||0)+Number(r.product_cost||0);   // เงินเข้าจริง = ยอดขาย − fee
   const prodO=o.filter(r=>r.source!=='gmv_ad');                          // ออเดอร์สินค้า (ไม่รวมค่าโฆษณา)
-  const paidO=prodO.filter(r=>r.paid);
-  const received=paidO.reduce((a,r)=>a+payoutOf(r),0);
-  const pending=prodO.filter(r=>!r.paid).reduce((a,r)=>a+payoutOf(r),0);
-  const adsTotal=o.filter(r=>r.source==='gmv_ad'&&r.paid).reduce((a,r)=>a+Number(r.ads_cost||0),0); // รวมเฉพาะที่ติ๊กแล้ว
+  const received=prodO.reduce((a,r)=>a+payoutOf(r),0);
+  const adsTotal=o.filter(r=>r.source==='gmv_ad').reduce((a,r)=>a+Number(r.ads_cost||0),0);
   $("#view").innerHTML=`
   <div class="page-head"><h1>ออเดอร์</h1>
-    <div class="row"><button class="btn-ghost btn-sm" id="markAll">✓ ติ๊กรับเงินทั้งหมด</button>
-    <button class="btn-ghost btn-sm" id="delAll">ล้างทั้งหมด</button>
+    <div class="row"><button class="btn-ghost btn-sm" id="delAll">ล้างทั้งหมด</button>
     <button id="addOrder">+ เพิ่มออเดอร์</button></div></div>
   <div class="card" style="margin-bottom:14px;display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
     <div><label>กรองตาม</label><select id="fBy" style="width:auto"><option value="paid_date" ${orderFilter.by==='paid_date'?'selected':''}>วันที่รับเงิน</option><option value="order_date" ${orderFilter.by==='order_date'?'selected':''}>วันที่รับงาน</option></select></div>
@@ -400,19 +397,17 @@ async function renderOrders(){
     <span class="muted" style="font-size:12px">${orderFilter.from||orderFilter.to?`กำลังดู ${orderFilter.from||'เริ่มต้น'} → ${orderFilter.to||'ล่าสุด'} · `:'ทั้งหมด '}${o.length} ออเดอร์</span>
   </div>
   <div class="stat-grid" style="margin-bottom:16px">
-    <div class="card stat" style="border-color:var(--green)"><div class="k">💰 รับเงินแล้ว (<span id="paidCnt">${paidO.length}/${prodO.length}</span> ออเดอร์)</div><div class="v pos" style="font-size:20px"><span id="paidSum">${baht(received)}</span></div></div>
-    <div class="card stat"><div class="k">⏳ ยังไม่ได้รับเงิน</div><div class="v" style="font-size:20px;color:var(--amber)"><span id="pendSum">${baht(pending)}</span></div></div>
-    <div class="card stat"><div class="k">📣 ค่าโฆษณา GMV Max<br/><span style="font-size:10px">เฉพาะที่ติ๊กแล้ว</span></div><div class="v" style="font-size:20px;color:var(--amber)"><span id="adsSum">${baht(adsTotal)}</span></div></div>
+    <div class="card stat" style="border-color:var(--green)"><div class="k">💰 เงินเข้าจริง (${prodO.length} ออเดอร์)</div><div class="v pos" style="font-size:20px">${baht(received)}</div></div>
+    <div class="card stat"><div class="k">📣 ค่าโฆษณา GMV Max</div><div class="v" style="font-size:20px;color:var(--amber)">${baht(adsTotal)}</div></div>
   </div>
   ${o.length? `<div class="tablewrap"><table>
-    <thead><tr><th>รับเงิน</th><th>วันที่รับงาน</th><th>วันที่รับเงิน</th><th>ออเดอร์</th><th>สถานะ</th><th>สินค้า</th><th class="num">จำนวน</th>
+    <thead><tr><th>วันที่รับงาน</th><th>วันที่รับเงิน</th><th>ออเดอร์</th><th>สถานะ</th><th>สินค้า</th><th class="num">จำนวน</th>
     <th class="num">ยอดขาย</th><th class="num">ต้นทุน</th><th class="num">ค่า fee รวม</th>
     <th class="num">จ่ายจริง</th><th class="num">กำไรสุทธิ</th><th></th></tr></thead><tbody>
     ${o.map(r=>{const fee=Number(r.commission_fee)+Number(r.transaction_fee)+Number(r.affiliate_fee)+Number(r.growth_fee)+Number(r.infra_fee)+Number(r.cod_fee)+Number(r.shipping_fee)+Number(r.ads_cost)+Number(r.vat_amount)+Number(r.other_fee);
       const isGmv=r.source==='gmv_ad', isCancel=r.source==='income'&&Number(r.gross_sales)===0;
       const badge=isGmv?'<span class="pill badge-neg">โฆษณา</span>':(isCancel?'<span class="pill badge-neg">ยกเลิก</span>':'<span class="pill badge-pos">สำเร็จ</span>');
       return `<tr style="${isCancel||isGmv?'opacity:.6':''}">
-      <td style="text-align:center"><input type="checkbox" class="paidChk" data-id="${r.id}" ${r.paid?'checked':''} style="width:auto;cursor:pointer;transform:scale(1.3)"/></td>
       <td style="white-space:nowrap">${esc(r.order_date||'—')}</td>
       <td style="white-space:nowrap;color:var(--green)">${esc(r.paid_date||'—')}</td><td>${esc(r.order_no||'—')}</td>
       <td>${badge}</td>
@@ -428,19 +423,8 @@ async function renderOrders(){
   $("#addOrder").onclick=orderModal;
   $("#fApply").onclick=()=>{orderFilter={from:$("#fFrom").value,to:$("#fTo").value,by:$("#fBy").value};renderOrders();};
   $("#fClear").onclick=()=>{orderFilter={from:'',to:'',by:$("#fBy").value};renderOrders();};
-  $("#markAll").onclick=async()=>{if(!confirm('ติ๊กว่าได้รับเงินครบทุกออเดอร์?'))return;
-    await sb.from('orders').update({paid:true}).eq('team_id',state.team.id);toast('ติ๊กรับเงินครบแล้ว');renderOrders();};
   $("#delAll").onclick=async()=>{if(!confirm('ลบออเดอร์ทั้งหมดของทีม?'))return;
     await sb.from('orders').delete().eq('team_id',state.team.id);toast('ลบแล้ว');renderOrders();};
-  document.querySelectorAll('.paidChk').forEach(b=>b.onchange=async()=>{
-    const r=o.find(x=>x.id===b.dataset.id); if(r)r.paid=b.checked;
-    await sb.from('orders').update({paid:b.checked}).eq('id',b.dataset.id);
-    const pd=prodO.filter(x=>x.paid);
-    $("#paidSum").textContent=baht(pd.reduce((a,x)=>a+payoutOf(x),0));
-    $("#pendSum").textContent=baht(prodO.filter(x=>!x.paid).reduce((a,x)=>a+payoutOf(x),0));
-    $("#adsSum").textContent=baht(o.filter(x=>x.source==='gmv_ad'&&x.paid).reduce((a,x)=>a+Number(x.ads_cost||0),0));
-    $("#paidCnt").textContent=pd.length+'/'+prodO.length;
-  });
   document.querySelectorAll('.delOne').forEach(b=>b.onclick=async()=>{
     await sb.from('orders').delete().eq('id',b.dataset.id);toast('ลบแล้ว');renderOrders();});
 }

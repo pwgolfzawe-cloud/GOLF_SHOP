@@ -274,6 +274,8 @@ const routes={
   '/products':renderProducts,'/expenses':renderExpenses,'/team':renderTeam,
 };
 const EXP_SUGGEST=['กล่อง','เทปกาว','บับเบิ้ล','ซองไปรษณีย์','สติกเกอร์/ใบปะหน้า','Ads TikTok (ยิงแอด)','ค่าการตลาด/โฆษณา','อุปกรณ์/เครื่องมือ','ขนส่งเข้าคลัง','อื่นๆ'];
+// บัญชีดำ SKU ที่เลิกขาย (ถ้วยมัทฉะ) — import แล้วข้ามอัตโนมัติ ไม่ให้เด้งกลับ
+const IGNORE_SKUS=new Set(['1736486158782465330','1736213839117518130','1736486158782596402','1736213839117583666','1736492816295429426','1736492816295560498','1736492816295626034','1736492816295691570']);
 function route(){
   const path=(location.hash.replace('#','')||'/dashboard').split('?')[0];
   document.querySelectorAll('#nav a').forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+path));
@@ -369,12 +371,13 @@ function calcFees({gross,qty,productCost,isCOD=true,adsOverride=null}){
 /* ============================================================
    ORDERS
    ============================================================ */
-let orderFilter={from:'',to:''};
+let orderFilter={from:'',to:'',by:'paid_date'};
 async function renderOrders(){
   loading();
-  let q=sb.from('orders').select('*').order('order_date',{ascending:false,nullsFirst:false}).order('created_time',{ascending:false,nullsFirst:false});
-  if(orderFilter.from)q=q.gte('order_date',orderFilter.from);
-  if(orderFilter.to)q=q.lte('order_date',orderFilter.to);
+  const byCol=orderFilter.by||'paid_date';
+  let q=sb.from('orders').select('*').order(byCol,{ascending:false,nullsFirst:false}).order('created_time',{ascending:false,nullsFirst:false});
+  if(orderFilter.from)q=q.gte(byCol,orderFilter.from);
+  if(orderFilter.to)q=q.lte(byCol,orderFilter.to);
   const {data:orders}=await q.limit(1000);
   const o=orders||[];
   const payoutOf=r=>Number(r.net_profit||0)+Number(r.product_cost||0);   // เงินเข้าจริง = ยอดขาย − fee
@@ -389,6 +392,7 @@ async function renderOrders(){
     <button class="btn-ghost btn-sm" id="delAll">ล้างทั้งหมด</button>
     <button id="addOrder">+ เพิ่มออเดอร์</button></div></div>
   <div class="card" style="margin-bottom:14px;display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
+    <div><label>กรองตาม</label><select id="fBy" style="width:auto"><option value="paid_date" ${orderFilter.by==='paid_date'?'selected':''}>วันที่รับเงิน</option><option value="order_date" ${orderFilter.by==='order_date'?'selected':''}>วันที่รับงาน</option></select></div>
     <div><label>จากวันที่</label><input type="date" id="fFrom" value="${orderFilter.from}" style="width:auto"/></div>
     <div><label>ถึงวันที่</label><input type="date" id="fTo" value="${orderFilter.to}" style="width:auto"/></div>
     <button class="btn-sm" id="fApply">🔍 กรอง</button>
@@ -401,7 +405,7 @@ async function renderOrders(){
     <div class="card stat"><div class="k">📣 ค่าโฆษณา GMV Max<br/><span style="font-size:10px">เฉพาะที่ติ๊กแล้ว</span></div><div class="v" style="font-size:20px;color:var(--amber)"><span id="adsSum">${baht(adsTotal)}</span></div></div>
   </div>
   ${o.length? `<div class="tablewrap"><table>
-    <thead><tr><th>รับเงิน</th><th>วันที่รับงาน</th><th>ออเดอร์</th><th>สถานะ</th><th>สินค้า</th><th class="num">จำนวน</th>
+    <thead><tr><th>รับเงิน</th><th>วันที่รับงาน</th><th>วันที่รับเงิน</th><th>ออเดอร์</th><th>สถานะ</th><th>สินค้า</th><th class="num">จำนวน</th>
     <th class="num">ยอดขาย</th><th class="num">ต้นทุน</th><th class="num">ค่า fee รวม</th>
     <th class="num">จ่ายจริง</th><th class="num">กำไรสุทธิ</th><th></th></tr></thead><tbody>
     ${o.map(r=>{const fee=Number(r.commission_fee)+Number(r.transaction_fee)+Number(r.affiliate_fee)+Number(r.growth_fee)+Number(r.infra_fee)+Number(r.cod_fee)+Number(r.shipping_fee)+Number(r.ads_cost)+Number(r.vat_amount)+Number(r.other_fee);
@@ -409,7 +413,8 @@ async function renderOrders(){
       const badge=isGmv?'<span class="pill badge-neg">โฆษณา</span>':(isCancel?'<span class="pill badge-neg">ยกเลิก</span>':'<span class="pill badge-pos">สำเร็จ</span>');
       return `<tr style="${isCancel||isGmv?'opacity:.6':''}">
       <td style="text-align:center"><input type="checkbox" class="paidChk" data-id="${r.id}" ${r.paid?'checked':''} style="width:auto;cursor:pointer;transform:scale(1.3)"/></td>
-      <td style="white-space:nowrap">${esc(r.order_date||'—')}</td><td>${esc(r.order_no||'—')}</td>
+      <td style="white-space:nowrap">${esc(r.order_date||'—')}</td>
+      <td style="white-space:nowrap;color:var(--green)">${esc(r.paid_date||'—')}</td><td>${esc(r.order_no||'—')}</td>
       <td>${badge}</td>
       <td>${esc(r.product_name||r.sku||'—')}</td><td class="num">${num(r.qty)}</td>
       <td class="num">${baht(r.gross_sales)}</td><td class="num">${baht(r.product_cost)}</td>
@@ -421,8 +426,8 @@ async function renderOrders(){
   : '<div class="empty">ยังไม่มีออเดอร์</div>'}`;
 
   $("#addOrder").onclick=orderModal;
-  $("#fApply").onclick=()=>{orderFilter={from:$("#fFrom").value,to:$("#fTo").value};renderOrders();};
-  $("#fClear").onclick=()=>{orderFilter={from:'',to:''};renderOrders();};
+  $("#fApply").onclick=()=>{orderFilter={from:$("#fFrom").value,to:$("#fTo").value,by:$("#fBy").value};renderOrders();};
+  $("#fClear").onclick=()=>{orderFilter={from:'',to:'',by:$("#fBy").value};renderOrders();};
   $("#markAll").onclick=async()=>{if(!confirm('ติ๊กว่าได้รับเงินครบทุกออเดอร์?'))return;
     await sb.from('orders').update({paid:true}).eq('team_id',state.team.id);toast('ติ๊กรับเงินครบแล้ว');renderOrders();};
   $("#delAll").onclick=async()=>{if(!confirm('ลบออเดอร์ทั้งหมดของทีม?'))return;
@@ -678,7 +683,7 @@ async function saveImport(){
    ============================================================ */
 async function parseIncome(ws,filename,ordersRows){
   const rows=XLSX.utils.sheet_to_json(ws,{defval:'',raw:true});
-  const H={id:'หมายเลขคำสั่งซื้อ/การปรับ',type:'ประเภทธุรกรรม',date:'เวลาที่สร้างคำสั่งซื้อ',
+  const H={id:'หมายเลขคำสั่งซื้อ/การปรับ',type:'ประเภทธุรกรรม',date:'เวลาที่สร้างคำสั่งซื้อ',paid:'เวลาที่ชำระคำสั่งซื้อ',
     payout:'จำนวนเงินที่ชำระทั้งหมด',rev:'รายได้รวม',trans:'ค่าธรรมเนียมคำสั่งซื้อ',comm:'ค่าคอมมิชชั่น TikTok Shop',
     ship:'ยอดรวมค่าจัดส่งที่ร้านค้าจ่ายจริง',aff:'ค่าคอมมิชชั่นแอฟฟิลิเอต',
     growth:'ค่าธรรมเนียมสนับสนุนการเติบโตของร้านค้า',infra:'ค่าธรรมเนียมโครงสร้างพื้นฐาน',prod:'รายละเอียดสินค้าที่ขายได้'};
@@ -709,7 +714,7 @@ async function parseIncome(ws,filename,ordersRows){
     const rev=n(r[H.rev]),pay=n(r[H.payout]),ded=rev-pay,oid=cleanVal(r[H.id]);
     const comm=ab(r[H.comm]),tr=ab(r[H.trans]),aff=ab(r[H.aff]),gr=ab(r[H.growth]),inf=ab(r[H.infra]),sh=ab(r[H.ship]);
     if(isGmv){
-      parsed.push({source:'gmv_ad',order_no:oid||null,order_date:parseDate(r[H.date]),sku:null,
+      parsed.push({source:'gmv_ad',order_no:oid||null,order_date:parseDate(r[H.date]),paid_date:parseDate(r[H.paid]),sku:null,
         product_name:'ค่าโฆษณา GMV Max',qty:0,gross_sales:0,product_cost:0,commission_fee:0,transaction_fee:0,
         affiliate_fee:0,growth_fee:0,infra_fee:0,cod_fee:0,shipping_fee:0,ads_cost:ded,vat_amount:0,other_fee:0,refund:0,net:-ded});
       return;
@@ -724,7 +729,8 @@ async function parseIncome(ws,filename,ordersRows){
         if(byPrice[rev]){hit=byPrice[rev].cost;pr=rev;} else{for(const p of priceList){if(rev>=p&&rev%p===0){hit=byPrice[p].cost*(rev/p);pr=p;break;}}}
         if(hit!=null){cost=hit;pname=priceName(pr);} }
     }
-    parsed.push({source:'income',order_no:oid||null,order_date:parseDate(r[H.date]),
+    if(sku&&IGNORE_SKUS.has(String(sku)))return;   // ข้ามถ้วยมัทฉะ (เลิกขาย) ไม่รับเข้าระบบ
+    parsed.push({source:'income',order_no:oid||null,order_date:parseDate(r[H.date]),paid_date:parseDate(r[H.paid]),
       created_time:(orderMap&&orderMap[oid]?orderMap[oid].ct:null),sku,product_name:pname,qty,
       gross_sales:rev,product_cost:cost,commission_fee:comm,transaction_fee:tr,affiliate_fee:aff,growth_fee:gr,infra_fee:inf,
       cod_fee:0,shipping_fee:sh,ads_cost:0,vat_amount:0,other_fee:other,refund:0,net:rev-cost-comm-tr-aff-gr-inf-sh-other});
@@ -792,7 +798,7 @@ async function saveIncome(parsed,filename){
   if(!fresh.length){toast('ไม่มีข้อมูลใหม่ — ทุกออเดอร์มีอยู่แล้ว ('+dup+' รายการ)',false);if(btn){btn.disabled=false;btn.textContent='✔ ไม่มีอะไรใหม่';}return;}
   const {data:batch}=await sb.from('import_batches').insert({team_id:state.team.id,filename:filename||'income',source:'income',row_count:fresh.length,created_by:state.session.user.id}).select().single();
   const rows=fresh.map(r=>({team_id:state.team.id,batch_id:batch?.id||null,created_by:state.session.user.id,source:r.source,
-    order_no:r.order_no,order_date:r.order_date,created_time:r.created_time||null,sku:r.sku,product_name:r.product_name,qty:r.qty,gross_sales:r.gross_sales,
+    order_no:r.order_no,order_date:r.order_date,paid_date:r.paid_date||null,created_time:r.created_time||null,sku:r.sku,product_name:r.product_name,qty:r.qty,gross_sales:r.gross_sales,
     product_cost:r.product_cost,commission_fee:r.commission_fee,transaction_fee:r.transaction_fee,affiliate_fee:r.affiliate_fee,
     growth_fee:r.growth_fee,infra_fee:r.infra_fee,cod_fee:r.cod_fee,shipping_fee:r.shipping_fee,ads_cost:r.ads_cost,
     vat_amount:r.vat_amount,other_fee:r.other_fee,refund:r.refund}));

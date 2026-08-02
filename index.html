@@ -401,7 +401,7 @@ async function renderOrders(){
     <div class="card stat"><div class="k">📣 ค่าโฆษณา GMV Max<br/><span style="font-size:10px">เฉพาะที่ติ๊กแล้ว</span></div><div class="v" style="font-size:20px;color:var(--amber)"><span id="adsSum">${baht(adsTotal)}</span></div></div>
   </div>
   ${o.length? `<div class="tablewrap"><table>
-    <thead><tr><th>รับเงิน</th><th>วันที่สั่งซื้อ</th><th>ออเดอร์</th><th>สถานะ</th><th>สินค้า</th><th class="num">จำนวน</th>
+    <thead><tr><th>รับเงิน</th><th>วันที่รับงาน</th><th>ออเดอร์</th><th>สถานะ</th><th>สินค้า</th><th class="num">จำนวน</th>
     <th class="num">ยอดขาย</th><th class="num">ต้นทุน</th><th class="num">ค่า fee รวม</th>
     <th class="num">จ่ายจริง</th><th class="num">กำไรสุทธิ</th><th></th></tr></thead><tbody>
     ${o.map(r=>{const fee=Number(r.commission_fee)+Number(r.transaction_fee)+Number(r.affiliate_fee)+Number(r.growth_fee)+Number(r.infra_fee)+Number(r.cod_fee)+Number(r.shipping_fee)+Number(r.ads_cost)+Number(r.vat_amount)+Number(r.other_fee);
@@ -409,7 +409,7 @@ async function renderOrders(){
       const badge=isGmv?'<span class="pill badge-neg">โฆษณา</span>':(isCancel?'<span class="pill badge-neg">ยกเลิก</span>':'<span class="pill badge-pos">สำเร็จ</span>');
       return `<tr style="${isCancel||isGmv?'opacity:.6':''}">
       <td style="text-align:center"><input type="checkbox" class="paidChk" data-id="${r.id}" ${r.paid?'checked':''} style="width:auto;cursor:pointer;transform:scale(1.3)"/></td>
-      <td style="white-space:nowrap">${esc(r.created_time||r.order_date||'—')}</td><td>${esc(r.order_no||'—')}</td>
+      <td style="white-space:nowrap">${esc(r.order_date||'—')}</td><td>${esc(r.order_no||'—')}</td>
       <td>${badge}</td>
       <td>${esc(r.product_name||r.sku||'—')}</td><td class="num">${num(r.qty)}</td>
       <td class="num">${baht(r.gross_sales)}</td><td class="num">${baht(r.product_cost)}</td>

@@ -321,7 +321,7 @@ async function renderDashboard(){
     sb.from('orders').select('*').order('order_date',{ascending:true}),
     sb.from('expenses').select('amount,category')
   ]);
-  const o=orders||[];
+  const o=(orders||[]).filter(r=>r.source!=='onhold');   // ไม่รวมออเดอร์รอเงิน (ยอดประมาณ ยังไม่เข้าจริง)
   const sum=k=>o.reduce((a,r)=>a+Number(r[k]||0),0);
   const sales=sum('gross_sales'), profit=sum('net_profit')+sum('product_cost'); // ไม่รวมต้นทุนสินค้า (กอล์ฟกรอกเองในค่าใช้จ่าย)
   const feesTotal=sum('commission_fee')+sum('transaction_fee')+sum('affiliate_fee')+sum('growth_fee')+sum('infra_fee')+sum('cod_fee')+sum('shipping_fee')+sum('vat_amount')+sum('other_fee'); // fee TikTok (ไม่รวมค่าโฆษณา)
@@ -408,9 +408,11 @@ async function renderOrders(){
   if(orderFilter.to)q=q.lte(byCol,orderFilter.to);
   const {data:orders}=await q.limit(1000);
   const o=orders||[];
-  const payoutOf=r=>Number(r.net_profit||0)+Number(r.product_cost||0);   // เงินเข้าจริง = ยอดขาย − fee
-  const prodO=o.filter(r=>r.source!=='gmv_ad');                          // ออเดอร์สินค้า (ไม่รวมค่าโฆษณา)
-  const received=prodO.reduce((a,r)=>a+payoutOf(r),0);
+  const payoutOf=r=>Number(r.net_profit||0)+Number(r.product_cost||0);   // จ่ายจริง = ยอดขาย − fee
+  const incomeO=o.filter(r=>r.source==='income');                        // เข้าเงินแล้ว (settled)
+  const onholdO=o.filter(r=>r.source==='onhold');                        // รอเงิน (on-hold)
+  const received=incomeO.reduce((a,r)=>a+payoutOf(r),0);
+  const pendingEst=onholdO.reduce((a,r)=>a+payoutOf(r),0);
   const adsTotal=o.filter(r=>r.source==='gmv_ad').reduce((a,r)=>a+Number(r.ads_cost||0),0);
   $("#view").innerHTML=`
   <div class="page-head"><h1>ออเดอร์</h1>
@@ -425,7 +427,8 @@ async function renderOrders(){
     <span class="muted" style="font-size:12px">${orderFilter.from||orderFilter.to?`กำลังดู ${orderFilter.from||'เริ่มต้น'} → ${orderFilter.to||'ล่าสุด'} · `:'ทั้งหมด '}${o.length} ออเดอร์</span>
   </div>
   <div class="stat-grid" style="margin-bottom:16px">
-    <div class="card stat" style="border-color:var(--green)"><div class="k">💰 เงินเข้าจริง (${prodO.length} ออเดอร์)</div><div class="v pos" style="font-size:20px">${baht(received)}</div></div>
+    <div class="card stat" style="border-color:var(--green)"><div class="k">💰 เงินเข้าจริง (${incomeO.length} ออเดอร์)</div><div class="v pos" style="font-size:20px">${baht(received)}</div></div>
+    <div class="card stat" style="border-color:var(--amber)"><div class="k">⏳ เงินรอเข้า ประมาณ (${onholdO.length} ออเดอร์)</div><div class="v" style="font-size:20px;color:var(--amber)">${baht(pendingEst)}</div></div>
     <div class="card stat"><div class="k">📣 ค่าโฆษณา GMV Max</div><div class="v" style="font-size:20px;color:var(--amber)">${baht(adsTotal)}</div></div>
   </div>
   ${o.length? `<div class="tablewrap"><table>
@@ -433,8 +436,8 @@ async function renderOrders(){
     <th class="num">ยอดขาย</th><th class="num">ต้นทุน</th><th class="num">ค่า fee รวม</th>
     <th class="num">จ่ายจริง</th><th class="num">กำไรสุทธิ</th><th></th></tr></thead><tbody>
     ${o.map(r=>{const fee=Number(r.commission_fee)+Number(r.transaction_fee)+Number(r.affiliate_fee)+Number(r.growth_fee)+Number(r.infra_fee)+Number(r.cod_fee)+Number(r.shipping_fee)+Number(r.ads_cost)+Number(r.vat_amount)+Number(r.other_fee);
-      const isGmv=r.source==='gmv_ad', isCancel=r.source==='income'&&Number(r.gross_sales)===0;
-      const badge=isGmv?'<span class="pill badge-neg">โฆษณา</span>':(isCancel?'<span class="pill badge-neg">ยกเลิก</span>':'<span class="pill badge-pos">สำเร็จ</span>');
+      const isGmv=r.source==='gmv_ad', isOnhold=r.source==='onhold', isCancel=r.source==='income'&&Number(r.gross_sales)===0;
+      const badge=isGmv?'<span class="pill badge-neg">โฆษณา</span>':isOnhold?'<span class="pill" style="background:rgba(255,176,32,.18);color:var(--amber)">รอเงิน</span>':(isCancel?'<span class="pill badge-neg">ยกเลิก</span>':'<span class="pill badge-pos">สำเร็จ</span>');
       return `<tr style="${isCancel||isGmv?'opacity:.6':''}">
       <td style="white-space:nowrap">${esc(r.order_date||'—')}</td>
       <td style="white-space:nowrap;color:var(--green)">${esc(r.paid_date||'—')}</td><td>${esc(r.order_no||'—')}</td>
@@ -514,7 +517,8 @@ function renderImport(){
     <p style="margin-bottom:6px"><b>เลือก 2 ไฟล์พร้อมกัน 🏆</b></p>
     <p class="muted" style="margin-bottom:6px">1️⃣ <b>ไฟล์การเงิน (Income/รายรับ)</b> — fee จริงทุกตัว + affiliate + ค่าโฆษณา GMV<br/>
     2️⃣ <b>ไฟล์ Orders (คำสั่งซื้อ)</b> — มี SKU ครบ 100% ให้ระบบจับคู่ต้นทุนจริงรายออเดอร์ ไม่ต้องเดา</p>
-    <p class="muted" style="font-size:12px;margin-bottom:14px">💡 กด Ctrl/Shift ค้างเพื่อเลือก 2 ไฟล์พร้อมกัน · ถ้าเลือกแค่ไฟล์การเงินไฟล์เดียวก็ได้ (ระบบจะเดาต้นทุนจากราคาแทน)</p>
+    <p class="muted" style="font-size:12px;margin-bottom:6px">💡 กด Ctrl/Shift ค้างเพื่อเลือก 2 ไฟล์พร้อมกัน · ถ้าเลือกแค่ไฟล์การเงินไฟล์เดียวก็ได้ (ระบบจะเดาต้นทุนจากราคาแทน)</p>
+    <p class="muted" style="font-size:12px;margin-bottom:14px">⏳ <b>ไฟล์ On-hold (ออเดอร์รอเงิน)</b> — อัปได้เหมือนกัน ระบบจะแสดงเป็นสถานะ "รอเงิน" พร้อมยอดจ่ายจริงโดยประมาณ (พอปิดรอบแล้วค่อยอัปไฟล์การเงินทับ ยอดจริงจะมาแทน)</p>
     <input type="file" id="file" accept=".xlsx,.xls,.csv" multiple/>
   </div>
   <div id="mapArea" style="margin-top:16px"></div>`;
@@ -558,8 +562,15 @@ function handleFile(e){
     rd.onload=ev=>{const wb=XLSX.read(ev.target.result,{type:'array',raw:true});wb.SheetNames.forEach(sn=>fixSheetRange(wb.Sheets[sn]));res({name:f.name,wb});};
     rd.readAsArrayBuffer(f);
   }))).then(list=>{
-    let incomeSheet=null,incomeName='',ordersRows=null,fallback=null;
+    let incomeSheet=null,incomeName='',ordersRows=null,fallback=null,onholdSheet=null,onholdName='';
     for(const {name,wb} of list){
+      // ไฟล์ On-hold (ออเดอร์รอเงิน)? — มีคอลัมน์ "จำนวนเงินที่ชำระโดยประมาณ"
+      let onh=null;
+      for(const sn of wb.SheetNames){
+        const rows=XLSX.utils.sheet_to_json(wb.Sheets[sn],{header:1,defval:''});
+        if(rows.some(row=>row.map(String).includes('จำนวนเงินที่ชำระโดยประมาณ'))){onh=wb.Sheets[sn];break;}
+      }
+      if(onh){onholdSheet=onh;onholdName=name;continue;}
       // ไฟล์การเงิน (Income)?
       let inc=null;
       for(const sn of wb.SheetNames){
@@ -574,6 +585,7 @@ function handleFile(e){
       if(cols.includes('order id')&&cols.some(c=>c==='sku id'||c==='seller sku')){ordersRows=rows;fallback=fallback||{name,rows};continue;}
       if(!fallback)fallback={name,rows};
     }
+    if(onholdSheet){ parseOnhold(onholdSheet,onholdName); return; }               // ออเดอร์รอเงิน
     if(incomeSheet){ parseIncome(incomeSheet,incomeName,ordersRows); return; }   // การเงินคือหลัก
     // ไม่มีไฟล์การเงิน → เส้นทางเดิม (TikTok Orders / ทั่วไป)
     if(!fallback||!fallback.rows.length){toast('ไฟล์ว่างเปล่า หรือไม่รู้จักรูปแบบ',false);return;}
@@ -726,7 +738,7 @@ async function parseIncome(ws,filename,ordersRows){
     const rev=n(r[H.rev]),pay=n(r[H.payout]),ded=rev-pay,oid=cleanVal(r[H.id]);
     const comm=ab(r[H.comm]),tr=ab(r[H.trans]),aff=ab(r[H.aff]),gr=ab(r[H.growth]),inf=ab(r[H.infra]),sh=ab(r[H.ship]);
     if(isGmv){
-      parsed.push({source:'gmv_ad',order_no:oid||null,order_date:parseDate(r[H.date]),paid_date:parseDate(r[H.paid]),sku:null,
+      parsed.push({source:'gmv_ad',order_no:oid||null,order_date:parseDate(r[H.date]),paid_date:parseDate(r[H.paid])||parseDate(r[H.date]),sku:null,
         product_name:'ค่าโฆษณา GMV Max',qty:0,gross_sales:0,product_cost:0,commission_fee:0,transaction_fee:0,
         affiliate_fee:0,growth_fee:0,infra_fee:0,cod_fee:0,shipping_fee:0,ads_cost:ded,vat_amount:0,other_fee:0,refund:0,net:-ded});
       return;
@@ -752,8 +764,37 @@ async function parseIncome(ws,filename,ordersRows){
   window._parsed=parsed; importMeta={isIncome:true,filename,hasOrders:!!orderMap,joined,dupCount,newCount:parsed.length-dupCount,skippedSku};
   renderIncomePreview(parsed,filename);
 }
+async function parseOnhold(ws,filename){
+  const aoa=XLSX.utils.sheet_to_json(ws,{header:1,defval:'',raw:true});
+  const hi=aoa.findIndex(row=>row.map(x=>cleanVal(x)).includes('จำนวนเงินที่ชำระโดยประมาณ'));
+  if(hi<0){toast('อ่านไฟล์ on-hold ไม่ได้',false);return;}
+  const hdr=aoa[hi].map(x=>cleanVal(x)), col=n=>hdr.indexOf(n);
+  const C={type:col('ประเภทธุรกรรม'),id:col('หมายเลขคำสั่งซื้อ/การปรับ'),est:col('จำนวนเงินที่ชำระโดยประมาณ'),
+    created:col('วันที่สร้างคำสั่งซื้อ'),sku:col('SKU ID'),name:col('ชื่อสินค้า'),qty:col('จำนวน'),rev:col('รายได้รวม')};
+  const n=v=>{const x=parseFloat(String(v==null?'':v).replace(/,/g,''));return isFinite(x)?x:0;};
+  const {data:prods}=await sb.from('products').select('sku,cost_price,name');
+  const costBySku={},nameBySku={};
+  (prods||[]).forEach(p=>{if(p.sku)String(p.sku).split(',').forEach(s=>{const k=cleanVal(s);if(k){costBySku[k]=Number(p.cost_price);nameBySku[k]=p.name;}});});
+  const parsed=[]; const skippedSku={};
+  for(let i=hi+1;i<aoa.length;i++){
+    const r=aoa[i], type=cleanVal(r[C.type]); if(!/คำสั่งซื้อ/.test(type))continue;
+    const oid=cleanVal(r[C.id]), rev=n(r[C.rev]), est=n(r[C.est]), sku=cleanVal(r[C.sku])||null, qty=n(r[C.qty])||1;
+    if(sku&&costBySku[sku]==null){skippedSku[sku]=(skippedSku[sku]||0)+1;continue;}
+    const cost=(sku&&costBySku[sku]!=null)?costBySku[sku]*qty:0;
+    const name=(sku&&nameBySku[sku])||cleanVal(r[C.name])||null;
+    const other=rev-est;   // ยอดหักโดยประมาณ (fee รวม) → payout = est
+    parsed.push({source:'onhold',order_no:oid||null,order_date:parseDate(r[C.created]),paid_date:null,created_time:null,
+      sku,product_name:name,qty,gross_sales:rev,product_cost:cost,commission_fee:0,transaction_fee:0,affiliate_fee:0,
+      growth_fee:0,infra_fee:0,cod_fee:0,shipping_fee:0,ads_cost:0,vat_amount:0,other_fee:other,refund:0,net:rev-cost-other});
+  }
+  const existing=await existingOrderNos();
+  const dupCount=parsed.filter(r=>r.order_no&&existing.has(String(r.order_no))).length;
+  window._parsed=parsed; importMeta={isOnhold:true,filename,dupCount,newCount:parsed.length-dupCount,skippedSku,hasOrders:true,joined:parsed.length};
+  renderIncomePreview(parsed,filename);
+}
 function renderIncomePreview(parsed,filename){
-  const orders=parsed.filter(r=>r.source==='income'), ads=parsed.filter(r=>r.source==='gmv_ad');
+  const oh=importMeta.isOnhold;
+  const orders=parsed.filter(r=>r.source!=='gmv_ad'), ads=parsed.filter(r=>r.source==='gmv_ad');
   const sum=(a,k)=>a.reduce((x,r)=>x+Number(r[k]||0),0);
   const rev=sum(orders,'gross_sales');
   const totFee=['commission_fee','transaction_fee','affiliate_fee','growth_fee','infra_fee','shipping_fee','other_fee'].reduce((x,k)=>x+sum(orders,k),0);
@@ -761,9 +802,9 @@ function renderIncomePreview(parsed,filename){
   const affTot=sum(orders,'affiliate_fee'), affCnt=orders.filter(r=>r.affiliate_fee>0).length;
   $("#mapArea").innerHTML=`
   <div class="card" style="background:linear-gradient(90deg,rgba(0,242,234,.12),transparent);border-color:var(--brand);margin-bottom:14px">
-    <b style="color:var(--brand)">✅ ตรวจพบไฟล์ Income (การเงิน TikTok)</b>
-    <p class="muted" style="font-size:12px;margin-top:4px">ใช้ fee จริงทุกตัวรายออเดอร์ · ${orders.length} ออเดอร์ + ค่าโฆษณา GMV ${ads.length} รายการ · reconcile ตรงเงินเข้าจริง</p>
-    <p style="font-size:12px;margin-top:6px;color:${importMeta.hasOrders?'var(--green)':'var(--amber)'}">${importMeta.hasOrders?`🔗 จับคู่ไฟล์ Orders แล้ว — ได้ SKU/ต้นทุนจริง ${importMeta.joined} ออเดอร์ (แม่น 100%)`:'⚠️ ไม่ได้แนบไฟล์ Orders — ระบบเดาต้นทุนจากราคาขาย (แม่น ~96%) แนะนำอัปไฟล์ Orders คู่มาด้วยเพื่อความเป๊ะ'}</p>
+    <b style="color:var(--brand)">✅ ${oh?'ตรวจพบไฟล์ On-hold (ออเดอร์รอเงิน)':'ตรวจพบไฟล์ Income (การเงิน TikTok)'}</b>
+    <p class="muted" style="font-size:12px;margin-top:4px">${oh?`ออเดอร์ที่ยังไม่ปิดรอบ ${orders.length} รายการ · แสดงเป็น "รอเงิน" พร้อมยอดจ่ายจริงโดยประมาณ`:`ใช้ fee จริงทุกตัวรายออเดอร์ · ${orders.length} ออเดอร์ + ค่าโฆษณา GMV ${ads.length} รายการ · reconcile ตรงเงินเข้าจริง`}</p>
+    ${oh?'':`<p style="font-size:12px;margin-top:6px;color:${importMeta.hasOrders?'var(--green)':'var(--amber)'}">${importMeta.hasOrders?`🔗 จับคู่ไฟล์ Orders แล้ว — ได้ SKU/ต้นทุนจริง ${importMeta.joined} ออเดอร์ (แม่น 100%)`:'⚠️ ไม่ได้แนบไฟล์ Orders — ระบบเดาต้นทุนจากราคาขาย (แม่น ~96%) แนะนำอัปไฟล์ Orders คู่มาด้วยเพื่อความเป๊ะ'}</p>`}
     <p style="font-size:12px;margin-top:4px;color:var(--brand)">⚡ นำเข้าเฉพาะส่วนใหม่: <b>${importMeta.newCount} รายการใหม่</b>${importMeta.dupCount?` · ข้ามที่มีอยู่แล้ว ${importMeta.dupCount} รายการ`:' · ไม่มีข้อมูลซ้ำ'}</p>
     ${importMeta.skippedSku&&Object.keys(importMeta.skippedSku).length?`<p style="font-size:12px;margin-top:4px;color:var(--red)">⚠️ พบ SKU ที่ยังไม่มีสินค้าในทีมนี้ (${Object.values(importMeta.skippedSku).reduce((a,b)=>a+b,0)} ออเดอร์ ไม่ถูกนำเข้า) — ถ้าเป็นสินค้าใหม่ ไปเพิ่มในหน้า "สินค้า" ด้วย SKU นี้ก่อน แล้ว import ซ้ำ:<br/>${Object.entries(importMeta.skippedSku).slice(0,8).map(([s,n])=>esc(s)+' ('+n+')').join(' · ')}</p>`:''}
   </div>
@@ -804,7 +845,10 @@ async function existingOrderNos(){
 }
 async function saveIncome(parsed,filename){
   const btn=$("#saveIncome"); if(btn){btn.disabled=true;btn.textContent='กำลังบันทึก...';}
-  // นำเข้าเฉพาะส่วนใหม่: ข้ามออเดอร์ที่ Order ID มีอยู่แล้ว (คงข้อมูล + ติ๊กรับเงินเดิมไว้ ไม่ทับ)
+  // ถ้านำเข้า income/settled: ลบตัว "รอเงิน" (on-hold) ของออเดอร์เดียวกันก่อน → ยอดจริงมาแทนยอดประมาณ
+  const settledNos=parsed.filter(r=>r.source!=='onhold').map(r=>r.order_no).filter(Boolean);
+  for(let i=0;i<settledNos.length;i+=300){ await sb.from('orders').delete().eq('team_id',state.team.id).eq('source','onhold').in('order_no',settledNos.slice(i,i+300)); }
+  // นำเข้าเฉพาะส่วนใหม่: ข้ามออเดอร์ที่ Order ID มีอยู่แล้ว (คงข้อมูลเดิม ไม่ทับ)
   const existing=await existingOrderNos();
   const fresh=parsed.filter(r=>!(r.order_no&&existing.has(String(r.order_no))));
   const dup=parsed.length-fresh.length;

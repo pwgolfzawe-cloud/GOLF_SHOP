@@ -640,7 +640,7 @@ function handleFile(e){
       let onh=null;
       for(const sn of wb.SheetNames){
         const rows=XLSX.utils.sheet_to_json(wb.Sheets[sn],{header:1,defval:''});
-        if(rows.some(row=>row.map(String).some(x=>/โดยประมาณ/.test(String(x))))){onh=wb.Sheets[sn];break;}
+        if(rows.some(row=>row.map(String).some(x=>{const t=String(x);return t.indexOf('โดยประมาณ')>=0&&t.indexOf('ชำระ')>=0;}))){onh=wb.Sheets[sn];break;}
       }
       if(onh){onholdSheet=onh;onholdName=name;continue;}
       // ไฟล์การเงิน (Income)?
@@ -818,7 +818,9 @@ async function parseIncome(ws,filename,ordersRows){
   };
   const n=v=>{const x=parseFloat(String(v==null?'':v).replace(/,/g,''));return isFinite(x)?x:0;};
   const ab=v=>Math.abs(n(v));
-  const {data:prods}=await sb.from('products').select('sku,cost_price,name,sell_price');
+  const {data:prods}=await sb.from('products').select('sku,cost_price,name,sell_price').eq('team_id',state.team.id);
+  const {data:_allP}=await sb.from('products').select('sku,team_id');
+  const otherSkus=new Set(); (_allP||[]).forEach(p=>{if(p.team_id!==state.team.id&&p.sku)String(p.sku).split(',').forEach(x=>{const k=cleanVal(x);if(k)otherSkus.add(k);});});
   const costBySku={},nameBySku={};
   (prods||[]).forEach(p=>{if(p.sku)String(p.sku).split(',').forEach(s=>{const k=cleanVal(s);if(k){costBySku[k]=Number(p.cost_price);nameBySku[k]=p.name;}});});
   // fallback เดาจากราคาขาย
@@ -862,6 +864,8 @@ async function parseIncome(ws,filename,ordersRows){
         if(hit!=null){cost=hit;pname=priceName(pr);} }
     }
     // นำเข้าเฉพาะออเดอร์ของสินค้าที่ "ทีมนี้" ขาย: ตรงจาก SKU หรือราคาใกล้เคียงเท่านั้น (กันมัทฉะ/ยกเลิก/ออเดอร์อื่นหลุดข้ามทีม)
+    const _chk=sku||parseProdDetail(r[H.prod]).sku;
+    if(_chk&&otherSkus.has(String(_chk))){skippedSku['🏷️ ออเดอร์ร้านอื่น (ไปอัปในทีมนั้น)']=(skippedSku['🏷️ ออเดอร์ร้านอื่น (ไปอัปในทีมนั้น)']||0)+1;return;}
     const attributed=(sku&&costBySku[String(sku)]!=null)||(rev>0&&priceList.some(p=>p>0&&(Math.abs(rev-p)<=Math.max(p*0.15,5)||(rev>=p&&rev%p===0))));
     if(!attributed){
       const candSku=sku||parseProdDetail(r[H.prod]).sku;
@@ -891,7 +895,7 @@ async function parseIncome(ws,filename,ordersRows){
 }
 async function parseOnhold(ws,filename){
   const aoa=XLSX.utils.sheet_to_json(ws,{header:1,defval:'',raw:true});
-  const hi=aoa.findIndex(row=>row.map(x=>cleanVal(x)).some(x=>/โดยประมาณ/.test(String(x))));
+  const hi=aoa.findIndex(row=>row.map(x=>cleanVal(x)).some(x=>{const t=String(x);return t.indexOf('โดยประมาณ')>=0&&t.indexOf('ชำระ')>=0;}));
   if(hi<0){toast('อ่านไฟล์ on-hold ไม่ได้',false);return;}
   const hdr=aoa[hi].map(x=>cleanVal(x)), col=n=>hdr.indexOf(n);
   const C={
@@ -905,7 +909,9 @@ async function parseOnhold(ws,filename){
     rev: COLI(hdr,['รายได้รวม','รายได้ทั้งหมด'],['รายได้'])
   };
   const n=v=>{const x=parseFloat(String(v==null?'':v).replace(/,/g,''));return isFinite(x)?x:0;};
-  const {data:prods}=await sb.from('products').select('sku,cost_price,name');
+  const {data:prods}=await sb.from('products').select('sku,cost_price,name').eq('team_id',state.team.id);
+  const {data:_allP}=await sb.from('products').select('sku,team_id');
+  const otherSkus=new Set(); (_allP||[]).forEach(p=>{if(p.team_id!==state.team.id&&p.sku)String(p.sku).split(',').forEach(x=>{const k=cleanVal(x);if(k)otherSkus.add(k);});});
   const costBySku={},nameBySku={};
   (prods||[]).forEach(p=>{if(p.sku)String(p.sku).split(',').forEach(s=>{const k=cleanVal(s);if(k){costBySku[k]=Number(p.cost_price);nameBySku[k]=p.name;}});});
   const parsed=[]; const skippedSku={}; const newSkus={}; const heldBySku={};
@@ -913,6 +919,7 @@ async function parseOnhold(ws,filename){
   for(let i=hi+1;i<aoa.length;i++){
     const r=aoa[i], type=cleanVal(r[C.type]); if(!/คำสั่งซื้อ/.test(type))continue;
     const oid=cleanVal(r[C.id]), rev=n(r[C.rev]), est=n(r[C.est]), sku=cleanVal(r[C.sku])||null, qty=n(r[C.qty])||1;
+    if(sku&&otherSkus.has(String(sku))){skippedSku['🏷️ ออเดอร์ร้านอื่น (ไปอัปในทีมนั้น)']=(skippedSku['🏷️ ออเดอร์ร้านอื่น (ไปอัปในทีมนั้น)']||0)+1;continue;}
     if(sku&&isIgnored(sku)){skippedSku['🚫 '+sku]=(skippedSku['🚫 '+sku]||0)+1;continue;}   // ไม่เอาถาวร
     if(sku&&costBySku[sku]==null&&!(oid&&existing.has(String(oid)))){   // ★ ของใหม่จริงเท่านั้นถึงพักไว้ · ถ้าเคยอยู่ในระบบให้ผ่านไปอัปเดต
       skippedSku[sku]=(skippedSku[sku]||0)+1;

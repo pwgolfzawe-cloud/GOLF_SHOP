@@ -602,8 +602,28 @@ function handleFile(e){
       if(cols.includes('order id')&&cols.some(c=>c==='sku id'||c==='seller sku')){ordersRows=rows;fallback=fallback||{name,rows};continue;}
       if(!fallback)fallback={name,rows};
     }
-    if(onholdSheet){ parseOnhold(onholdSheet,onholdName); return; }               // ออเดอร์รอเงิน
-    if(incomeSheet){ parseIncome(incomeSheet,incomeName,ordersRows); return; }   // การเงินคือหลัก
+    if(incomeSheet||onholdSheet){   // ประมวลผล "ทุกไฟล์" ที่ลากมา ไม่ทิ้งไฟล์ไหน
+      (async()=>{
+        const parts=[],metas=[],names=[];
+        if(incomeSheet){ const r=await parseIncome(incomeSheet,incomeName,ordersRows); if(r){parts.push(r.parsed);metas.push(r.meta);names.push(incomeName);} }
+        if(onholdSheet){ const r=await parseOnhold(onholdSheet,onholdName); if(r){parts.push(r.parsed);metas.push(r.meta);names.push(onholdName);} }
+        if(!parts.length){toast('อ่านไฟล์ไม่ได้ หรือรูปแบบไม่ตรง',false);return;}
+        // Income (ปิดรอบ = มี fee จริง + วันรับเงิน) ชนะ On-hold (รอเงิน) เมื่อ order_no ซ้ำ
+        const incNos=new Set();
+        parts.forEach((pp,i)=>{ if(metas[i].isIncome) pp.forEach(r=>{if(r.order_no)incNos.add(String(r.order_no));}); });
+        let merged=[];
+        parts.forEach((pp,i)=>{ merged=merged.concat(metas[i].isOnhold?pp.filter(r=>!(r.order_no&&incNos.has(String(r.order_no)))):pp); });
+        const hasInc=metas.some(m=>m.isIncome), hasOh=metas.some(m=>m.isOnhold);
+        const newSkusMap={}; metas.forEach(m=>(m.newSkus||[]).forEach(x=>{if(!newSkusMap[x.sku])newSkusMap[x.sku]=x;}));
+        const skippedSku={}; metas.forEach(m=>Object.entries(m.skippedSku||{}).forEach(([k,v])=>skippedSku[k]=(skippedSku[k]||0)+v));
+        window._parsed=merged;
+        importMeta={isIncome:hasInc,isOnhold:hasInc?false:hasOh,combined:hasInc&&hasOh,
+          filename:names.join(' + '),hasOrders:!!ordersRows,joined:metas.reduce((a,m)=>a+(m.joined||0),0),
+          skippedSku,newSkus:Object.values(newSkusMap)};
+        renderIncomePreview(merged,names.join(' + '));
+      })();
+      return;
+    }
     // ไม่มีไฟล์การเงิน → เส้นทางเดิม (TikTok Orders / ทั่วไป)
     if(!fallback||!fallback.rows.length){toast('ไฟล์ว่างเปล่า หรือไม่รู้จักรูปแบบ',false);return;}
     importRows=fallback.rows; importCols=Object.keys(fallback.rows[0]).map(c=>c);
@@ -795,10 +815,7 @@ async function parseIncome(ws,filename,ordersRows){
       gross_sales:rev,product_cost:cost,commission_fee:comm,transaction_fee:tr,affiliate_fee:aff,growth_fee:gr,infra_fee:inf,
       cod_fee:0,shipping_fee:sh,ads_cost:0,vat_amount:0,other_fee:other,refund:0,net:rev-cost-comm-tr-aff-gr-inf-sh-other});
   });
-  const existing=await existingOrderNos();
-  const dupCount=parsed.filter(r=>r.order_no&&existing.has(String(r.order_no))).length;
-  window._parsed=parsed; importMeta={isIncome:true,filename,hasOrders:!!orderMap,joined,dupCount,newCount:parsed.length-dupCount,skippedSku,newSkus:Object.values(newSkus)};
-  renderIncomePreview(parsed,filename);
+  return {parsed, meta:{isIncome:true,filename,hasOrders:!!orderMap,joined,skippedSku,newSkus:Object.values(newSkus)}};
 }
 async function parseOnhold(ws,filename){
   const aoa=XLSX.utils.sheet_to_json(ws,{header:1,defval:'',raw:true});
@@ -831,10 +848,7 @@ async function parseOnhold(ws,filename){
       sku,product_name:name,qty,gross_sales:rev,product_cost:cost,commission_fee:0,transaction_fee:0,affiliate_fee:0,
       growth_fee:0,infra_fee:0,cod_fee:0,shipping_fee:0,ads_cost:0,vat_amount:0,other_fee:other,refund:0,net:rev-cost-other});
   }
-  const existing=await existingOrderNos();
-  const dupCount=parsed.filter(r=>r.order_no&&existing.has(String(r.order_no))).length;
-  window._parsed=parsed; importMeta={isOnhold:true,filename,dupCount,newCount:parsed.length-dupCount,skippedSku,hasOrders:true,joined:parsed.length,newSkus:Object.values(newSkus)};
-  renderIncomePreview(parsed,filename);
+  return {parsed, meta:{isOnhold:true,filename,skippedSku,hasOrders:true,joined:parsed.length,newSkus:Object.values(newSkus)}};
 }
 function renderIncomePreview(parsed,filename){
   const oh=importMeta.isOnhold;
@@ -849,7 +863,7 @@ function renderIncomePreview(parsed,filename){
     <b style="color:var(--brand)">✅ ${oh?'ตรวจพบไฟล์ On-hold (ออเดอร์รอเงิน)':'ตรวจพบไฟล์ Income (การเงิน TikTok)'}</b>
     <p class="muted" style="font-size:12px;margin-top:4px">${oh?`ออเดอร์ที่ยังไม่ปิดรอบ ${orders.length} รายการ · แสดงเป็น "รอเงิน" พร้อมยอดจ่ายจริงโดยประมาณ`:`ใช้ fee จริงทุกตัวรายออเดอร์ · ${orders.length} ออเดอร์ + ค่าโฆษณา GMV ${ads.length} รายการ · reconcile ตรงเงินเข้าจริง`}</p>
     ${oh?'':`<p style="font-size:12px;margin-top:6px;color:${importMeta.hasOrders?'var(--green)':'var(--amber)'}">${importMeta.hasOrders?`🔗 จับคู่ไฟล์ Orders แล้ว — ได้ SKU/ต้นทุนจริง ${importMeta.joined} ออเดอร์ (แม่น 100%)`:'⚠️ ไม่ได้แนบไฟล์ Orders — ระบบเดาต้นทุนจากราคาขาย (แม่น ~96%) แนะนำอัปไฟล์ Orders คู่มาด้วยเพื่อความเป๊ะ'}</p>`}
-    <p style="font-size:12px;margin-top:4px;color:var(--brand)">⚡ นำเข้าเฉพาะส่วนใหม่: <b>${importMeta.newCount} รายการใหม่</b>${importMeta.dupCount?` · ข้ามที่มีอยู่แล้ว ${importMeta.dupCount} รายการ`:' · ไม่มีข้อมูลซ้ำ'}</p>
+    <p style="font-size:12px;margin-top:4px;color:var(--brand)">⚡ โหมดไฟล์ล่าสุดชนะ: อัปเดต/เพิ่ม <b>${parsed.length} รายการ</b>${importMeta.combined?' · รวมไฟล์ Income + On-hold (Income ชนะเมื่อออเดอร์ซ้ำ)':''} · ออเดอร์เดิมที่ไม่ได้อยู่ในไฟล์นี้ยังอยู่ครบ</p>
     ${importMeta.newSkus&&importMeta.newSkus.length?`<div style="margin-top:10px;padding:11px 12px;background:rgba(255,176,32,.08);border:1px solid var(--amber);border-radius:10px">
       <b style="color:var(--amber);font-size:13px">🆕 พบสินค้าใหม่ที่ยังไม่มีในทีมนี้ ${importMeta.newSkus.length} รายการ</b>
       <p class="muted" style="font-size:11px;margin:3px 0 8px">ออเดอร์กลุ่มนี้ยัง <b>ไม่ถูกนำเข้า</b> — กด "เพิ่มสินค้า" ใส่แค่ต้นทุน (ชื่อ+SKU+ราคาดึงมาให้แล้ว) เสร็จแล้ว import ไฟล์นี้ซ้ำอีกรอบ ออเดอร์จะเข้าครบ</p>

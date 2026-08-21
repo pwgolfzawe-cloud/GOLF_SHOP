@@ -879,7 +879,7 @@ function renderIncomePreview(parsed,filename){
       <td class="num ${r.net>=0?'pos':'neg'}">${baht(r.net)}</td></tr>`;}).join('')}
     </tbody></table></div>
     ${parsed.length>100?`<p class="muted" style="margin-top:8px">แสดง 100 แถวแรก · บันทึกทั้งหมด ${parsed.length} รายการ</p>`:''}
-    <button id="saveIncome" style="margin-top:14px">✔ นำเข้าเฉพาะใหม่ ${importMeta.newCount} รายการ${importMeta.dupCount?` (ข้ามซ้ำ ${importMeta.dupCount})`:''}</button>
+    <button id="saveIncome" style="margin-top:14px">✔ นำเข้า/อัปเดต ${parsed.length} รายการ (ไฟล์ล่าสุดชนะ)</button>
   </div>`;
   $("#saveIncome").onclick=()=>saveIncome(parsed,filename);
   document.querySelectorAll('.addNewSku').forEach(b=>b.onclick=()=>{const s=importMeta.newSkus[+b.dataset.i];productModal(null,{name:s.name||'',sku:s.sku,sell_price:s.price});});
@@ -897,16 +897,11 @@ async function existingOrderNos(){
 }
 async function saveIncome(parsed,filename){
   const btn=$("#saveIncome"); if(btn){btn.disabled=true;btn.textContent='กำลังบันทึก...';}
-  // ถ้านำเข้า income/settled: ลบตัว "รอเงิน" (on-hold) ของออเดอร์เดียวกันก่อน → ยอดจริงมาแทนยอดประมาณ
-  const settledNos=parsed.filter(r=>r.source!=='onhold').map(r=>r.order_no).filter(Boolean);
-  for(let i=0;i<settledNos.length;i+=300){ await sb.from('orders').delete().eq('team_id',state.team.id).eq('source','onhold').in('order_no',settledNos.slice(i,i+300)); }
-  // นำเข้าเฉพาะส่วนใหม่: ข้ามออเดอร์ที่ Order ID มีอยู่แล้ว (คงข้อมูลเดิม ไม่ทับ)
-  const existing=await existingOrderNos();
-  const fresh=parsed.filter(r=>!(r.order_no&&existing.has(String(r.order_no))));
-  const dup=parsed.length-fresh.length;
-  if(!fresh.length){toast('ไม่มีข้อมูลใหม่ — ทุกออเดอร์มีอยู่แล้ว ('+dup+' รายการ)',false);if(btn){btn.disabled=false;btn.textContent='✔ ไม่มีอะไรใหม่';}return;}
-  const {data:batch}=await sb.from('import_batches').insert({team_id:state.team.id,filename:filename||'income',source:'income',row_count:fresh.length,created_by:state.session.user.id}).select().single();
-  const rows=fresh.map(r=>({team_id:state.team.id,batch_id:batch?.id||null,created_by:state.session.user.id,source:r.source,
+  // อัปเดตแบบ "ไฟล์ล่าสุดชนะ": ลบออเดอร์เดิม (ทุก source) ที่ order_no อยู่ในไฟล์นี้ แล้วใส่ข้อมูลใหม่ทับ → paid_date/ยอด อัปเดตเสมอ
+  const nos=[...new Set(parsed.map(r=>r.order_no).filter(Boolean))];
+  for(let i=0;i<nos.length;i+=300){ await sb.from('orders').delete().eq('team_id',state.team.id).in('order_no',nos.slice(i,i+300)); }
+  const {data:batch}=await sb.from('import_batches').insert({team_id:state.team.id,filename:filename||'income',source:'income',row_count:parsed.length,created_by:state.session.user.id}).select().single();
+  const rows=parsed.map(r=>({team_id:state.team.id,batch_id:batch?.id||null,created_by:state.session.user.id,source:r.source,
     order_no:r.order_no,order_date:r.order_date,paid_date:r.paid_date||null,created_time:r.created_time||null,sku:r.sku,product_name:r.product_name,qty:r.qty,gross_sales:r.gross_sales,
     product_cost:r.product_cost,commission_fee:r.commission_fee,transaction_fee:r.transaction_fee,affiliate_fee:r.affiliate_fee,
     growth_fee:r.growth_fee,infra_fee:r.infra_fee,cod_fee:r.cod_fee,shipping_fee:r.shipping_fee,ads_cost:r.ads_cost,
@@ -915,7 +910,7 @@ async function saveIncome(parsed,filename){
     const {error}=await sb.from('orders').insert(rows.slice(i,i+200));
     if(error){toast(translate(error.message),false);if(btn){btn.disabled=false;btn.textContent='ลองใหม่';}return;}
   }
-  toast('นำเข้าใหม่ '+rows.length+' รายการ'+(dup?' (ข้ามซ้ำ '+dup+')':''));location.hash='#/dashboard';route();
+  toast('อัปเดตแล้ว '+rows.length+' รายการ (ไฟล์ล่าสุดชนะ)');location.hash='#/dashboard';route();
 }
 
 /* ============================================================

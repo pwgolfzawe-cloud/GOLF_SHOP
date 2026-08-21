@@ -552,8 +552,9 @@ function parseDate(v){
   v=cleanVal(v); if(!v)return null;
   let m=v.match(/^(\d{4})[\/-](\d{1,2})[\/-](\d{1,2})/);      // YYYY/MM/DD หรือ YYYY-MM-DD (ไฟล์ Income)
   if(m)return `${m[1]}-${m[2].padStart(2,'0')}-${m[3].padStart(2,'0')}`;
-  m=v.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);                // DD/MM/YYYY (TikTok Orders ไทย)
-  if(m)return `${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`;
+  m=v.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);                // DD/MM/YYYY หรือ M/D/YYYY — ตรวจจากตัวเลข
+  if(m){var a=+m[1],b=+m[2],day,mon; if(a>12){day=a;mon=b;} else if(b>12){day=b;mon=a;} else {day=a;mon=b;} // เลข>12=วันแน่นอน · กำกวมเดา DD/MM (TikTok ไทย)
+    return `${m[3]}-${String(mon).padStart(2,'0')}-${String(day).padStart(2,'0')}`;}
   return null;
 }
 // แก้ !ref ของ xlsx ที่ประกาศ range ผิด (ไฟล์ Income ของ TikTok บอกแค่ 2 แถว) โดยสแกนเซลล์จริง

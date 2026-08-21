@@ -529,6 +529,17 @@ let importRows=[], importCols=[], importMeta={};
 // --- helpers เฉพาะ import ---
 function cleanVal(v){return String(v==null?'':v).replace(/\t/g,'').trim();}
 function toNum(v){return parseFloat(cleanVal(v).replace(/,/g,'').replace(/[^0-9.\-]/g,''))||0;}
+
+// --- robust column resolver: ทน TikTok เปลี่ยนชื่อคอลัมน์ (แก้ทีเดียว กันทั้งระบบ) ---
+function _nh(s){return String(s==null?'':s).replace(/[​﻿]/g,'').replace(/\s+/g,' ').trim().toLowerCase();}
+function COL(keys,aliases,kws){var nk=(keys||[]).map(function(k){return [_nh(k),k];});
+  for(var a of aliases){var na=_nh(a);var h=nk.find(function(x){return x[0]===na;});if(h)return h[1];}
+  if(kws)for(var p of nk){if(kws.every(function(w){return p[0].includes(_nh(w));}))return p[1];}
+  return null;}
+function COLI(hdr,aliases,kws){var nk=(hdr||[]).map(function(k,i){return [_nh(k),i];});
+  for(var a of aliases){var na=_nh(a);var h=nk.find(function(x){return x[0]===na;});if(h)return h[1];}
+  if(kws)for(var p of nk){if(kws.every(function(w){return p[0].includes(_nh(w));}))return p[1];}
+  return -1;}
 function parseDate(v){
   if(v instanceof Date&&!isNaN(v)) return v.toISOString().slice(0,10);
   if(typeof v==='number'&&isFinite(v)){                       // Excel serial (ไฟล์ .xlsx จริง)
@@ -569,14 +580,14 @@ function handleFile(e){
       let onh=null;
       for(const sn of wb.SheetNames){
         const rows=XLSX.utils.sheet_to_json(wb.Sheets[sn],{header:1,defval:''});
-        if(rows.some(row=>row.map(String).includes('จำนวนเงินที่ชำระโดยประมาณ'))){onh=wb.Sheets[sn];break;}
+        if(rows.some(row=>row.map(String).some(x=>/โดยประมาณ/.test(String(x))))){onh=wb.Sheets[sn];break;}
       }
       if(onh){onholdSheet=onh;onholdName=name;continue;}
       // ไฟล์การเงิน (Income)?
       let inc=null;
       for(const sn of wb.SheetNames){
         const h=(XLSX.utils.sheet_to_json(wb.Sheets[sn],{header:1,defval:''})[0]||[]).map(String);
-        if(h.includes('ประเภทธุรกรรม')&&h.some(x=>/แอฟฟิลิเอต/.test(x))){inc=wb.Sheets[sn];break;}
+        if(h.some(x=>/ประเภทธุรกรรม/.test(x))&&h.some(x=>/แอฟฟิลิเอต|รายได้|คอมมิชชั่น/.test(x))){inc=wb.Sheets[sn];break;}
       }
       if(inc){incomeSheet=inc;incomeName=name;continue;}
       // ไฟล์ Orders?
@@ -708,10 +719,22 @@ async function saveImport(){
    ============================================================ */
 async function parseIncome(ws,filename,ordersRows){
   const rows=XLSX.utils.sheet_to_json(ws,{defval:'',raw:true});
-  const H={id:'หมายเลขคำสั่งซื้อ/การปรับ',type:'ประเภทธุรกรรม',date:'เวลาที่สร้างคำสั่งซื้อ',paid:'เวลาที่ชำระคำสั่งซื้อ',
-    payout:'จำนวนเงินที่ชำระทั้งหมด',rev:'รายได้รวม',trans:'ค่าธรรมเนียมคำสั่งซื้อ',comm:'ค่าคอมมิชชั่น TikTok Shop',
-    ship:'ยอดรวมค่าจัดส่งที่ร้านค้าจ่ายจริง',aff:'ค่าคอมมิชชั่นแอฟฟิลิเอต',
-    growth:'ค่าธรรมเนียมสนับสนุนการเติบโตของร้านค้า',infra:'ค่าธรรมเนียมโครงสร้างพื้นฐาน',prod:'รายละเอียดสินค้าที่ขายได้'};
+  const _K=Object.keys(rows[0]||{});
+  const H={
+    id:   COL(_K,['หมายเลขคำสั่งซื้อ/การปรับ'],['หมายเลข']),
+    type: COL(_K,['ประเภทธุรกรรม'],['ประเภท']),
+    date: COL(_K,['เวลาที่สร้างคำสั่งซื้อ','วันที่สร้างคำสั่งซื้อ'],['สร้าง','สั่งซื้อ']),
+    paid: COL(_K,['เวลาที่ชำระค่าสั่งซื้อ','เวลาที่ชำระคำสั่งซื้อ'],['เวลา','ชำระ']),
+    payout:COL(_K,['จำนวนเงินที่ชำระทั้งหมด','ยอดการชำระเงินทั้งหมด','ยอดชำระเงินทั้งหมด'],['ชำระ','ทั้งหมด']),
+    rev:  COL(_K,['รายได้รวม','รายได้ทั้งหมด'],['รายได้']),
+    trans:COL(_K,['ค่าธรรมเนียมคำสั่งซื้อ','ค่าธรรมเนียมการทำธุรกรรม'],['ธรรมเนียม','ธุรกรรม']),
+    comm: COL(_K,['ค่าคอมมิชชั่น TikTok Shop'],['คอมมิชชั่น','shop']),
+    ship: COL(_K,['ยอดรวมค่าจัดส่งที่ร้านค้าจ่ายจริง'],['จัดส่ง','ร้านค้า']),
+    aff:  COL(_K,['ค่าคอมมิชชั่นแอฟฟิลิเอต'],['แอฟฟิลิเอต']),
+    growth:COL(_K,['ค่าธรรมเนียมสนับสนุนการเติบโตของร้านค้า'],['เติบโต']),
+    infra:COL(_K,['ค่าธรรมเนียมโครงสร้างพื้นฐาน'],['โครงสร้างพื้นฐาน']),
+    prod: COL(_K,['รายละเอียดสินค้าที่ขายได้'],['รายละเอียดสินค้า'])
+  };
   const n=v=>{const x=parseFloat(String(v==null?'':v).replace(/,/g,''));return isFinite(x)?x:0;};
   const ab=v=>Math.abs(n(v));
   const {data:prods}=await sb.from('products').select('sku,cost_price,name,sell_price');
@@ -774,11 +797,19 @@ async function parseIncome(ws,filename,ordersRows){
 }
 async function parseOnhold(ws,filename){
   const aoa=XLSX.utils.sheet_to_json(ws,{header:1,defval:'',raw:true});
-  const hi=aoa.findIndex(row=>row.map(x=>cleanVal(x)).includes('จำนวนเงินที่ชำระโดยประมาณ'));
+  const hi=aoa.findIndex(row=>row.map(x=>cleanVal(x)).some(x=>/โดยประมาณ/.test(String(x))));
   if(hi<0){toast('อ่านไฟล์ on-hold ไม่ได้',false);return;}
   const hdr=aoa[hi].map(x=>cleanVal(x)), col=n=>hdr.indexOf(n);
-  const C={type:col('ประเภทธุรกรรม'),id:col('หมายเลขคำสั่งซื้อ/การปรับ'),est:col('จำนวนเงินที่ชำระโดยประมาณ'),
-    created:col('วันที่สร้างคำสั่งซื้อ'),sku:col('SKU ID'),name:col('ชื่อสินค้า'),qty:col('จำนวน'),rev:col('รายได้รวม')};
+  const C={
+    type:COLI(hdr,['ประเภทธุรกรรม'],['ประเภท']),
+    id:  COLI(hdr,['หมายเลขคำสั่งซื้อ/การปรับ'],['หมายเลข']),
+    est: COLI(hdr,['จำนวนเงินที่ชำระโดยประมาณ'],['ชำระ','ประมาณ']),
+    created:COLI(hdr,['วันที่สร้างคำสั่งซื้อ','เวลาที่สร้างคำสั่งซื้อ'],['สร้าง']),
+    sku: COLI(hdr,['SKU ID','SKU'],['sku']),
+    name:COLI(hdr,['ชื่อสินค้า'],['ชื่อสินค้า']),
+    qty: COLI(hdr,['จำนวน','Quantity'],['จำนวน']),
+    rev: COLI(hdr,['รายได้รวม','รายได้ทั้งหมด'],['รายได้'])
+  };
   const n=v=>{const x=parseFloat(String(v==null?'':v).replace(/,/g,''));return isFinite(x)?x:0;};
   const {data:prods}=await sb.from('products').select('sku,cost_price,name');
   const costBySku={},nameBySku={};

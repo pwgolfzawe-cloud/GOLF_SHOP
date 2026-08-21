@@ -367,11 +367,13 @@ async function renderDashboard(){
   const byCat={};
   o.forEach(r=>{if(r.source==='gmv_ad')return;const c=classifyCat(r.product_name,r.sku);const b=byCat[c]||(byCat[c]={s:0,p:0,q:0,n:0});b.s+=Number(r.gross_sales||0);b.p+=Number(r.net_profit||0);b.q+=Number(r.qty||0);if(Number(r.gross_sales)>0)b.n++;});
   const cats=Object.entries(byCat).sort((a,b)=>b[1].s-a[1].s);
-  // 2 มุมวันที่: วันรับเงินล่าสุด vs วันรับงานล่าสุด
-  const settled=o.filter(r=>r.source!=='gmv_ad'&&Number(r.gross_sales)>0);
-  const pd=settled.map(r=>r.paid_date).filter(Boolean).sort(), od=settled.map(r=>r.order_date).filter(Boolean).sort();
+  // 2 มุมวันที่: วันรับเงินล่าสุด (เฉพาะรับแล้ว) vs วันรับงานล่าสุด (รวมรอเงิน)
+  const allReal=(orders||[]).filter(r=>r.source!=='gmv_ad'&&Number(r.gross_sales)>0);   // รวมออเดอร์รอเงิน
+  const settledReal=allReal.filter(r=>r.source!=='onhold'&&!!r.paid_date);              // รับเงินแล้วจริง
+  const pd=settledReal.map(r=>r.paid_date).sort(), od=allReal.map(r=>r.order_date).filter(Boolean).sort();
   const maxPaid=pd.length?pd[pd.length-1]:'—', maxOrder=od.length?od[od.length-1]:'—';
-  const paidRows=settled.filter(r=>r.paid_date===maxPaid), orderRows=settled.filter(r=>r.order_date===maxOrder);
+  const paidRows=settledReal.filter(r=>r.paid_date===maxPaid), orderRows=allReal.filter(r=>r.order_date===maxOrder);
+  const pendingCnt=allReal.filter(r=>r.source==='onhold').length;
   const paidAmt=paidRows.reduce((a,r)=>a+Number(r.net_profit||0)+Number(r.product_cost||0),0);
   const orderAmt=orderRows.reduce((a,r)=>a+Number(r.gross_sales||0),0);
 
@@ -391,10 +393,11 @@ async function renderDashboard(){
       <div class="v" style="font-size:22px;color:var(--brand)">${esc(maxPaid)}</div>
       <div class="kv" style="margin-top:6px"><span class="muted">เงินเข้าวันนั้น</span><b>${baht(paidAmt)}</b></div>
       <div class="kv"><span class="muted">จำนวนออเดอร์</span><b>${num(paidRows.length)}</b></div></div>
-    <div class="card"><div class="k muted">📦 วันรับงานล่าสุด (order_date)</div>
+    <div class="card"><div class="k muted">📦 วันรับงานล่าสุด (order_date) <span style="font-size:10px">· รวมรอเงิน</span></div>
       <div class="v" style="font-size:22px">${esc(maxOrder)}</div>
       <div class="kv" style="margin-top:6px"><span class="muted">ยอดขายวันนั้น</span><b>${baht(orderAmt)}</b></div>
-      <div class="kv"><span class="muted">จำนวนออเดอร์</span><b>${num(orderRows.length)}</b></div></div>
+      <div class="kv"><span class="muted">จำนวนออเดอร์</span><b>${num(orderRows.length)}</b></div>
+      ${pendingCnt?`<div class="kv"><span class="muted">ในนี้เป็นออเดอร์รอเงิน</span><b style="color:var(--amber)">${num(pendingCnt)}</b></div>`:''}</div>
   </div>
   <div class="card" style="margin-bottom:14px"><b>แยกตามหมวดสินค้า</b>
     <div class="tablewrap" style="margin-top:12px"><table><thead><tr><th>หมวด</th><th class="num">ยอดขาย</th><th class="num">กำไรสุทธิ</th><th class="num">จำนวน (ชิ้น)</th><th class="num">ออเดอร์</th></tr></thead><tbody>
@@ -451,9 +454,15 @@ async function renderOrders(){
   let q=sb.from('orders').select('*').order(byCol,{ascending:false,nullsFirst:false}).order('created_time',{ascending:false,nullsFirst:false});
   const {data:orders}=await q.limit(2000);
   let o=orders||[];
-  // กรองช่วงวันที่แบบเห็นออเดอร์รอเงินด้วย: settled ใช้ paid_date · on-hold (ยังไม่ชำระ) ใช้ order_date แทน
+  // จำนวนออเดอร์รอเงินทั้งหมด (ไว้เตือนเมื่ออยู่มุมวันรับเงิน)
+  const hiddenOnhold=(orders||[]).filter(r=>r.source==='onhold'&&Number(r.gross_sales)>0).length;
+  // เลนส์: "วันรับเงิน" = เฉพาะที่รับเงินแล้วจริง (มี paid_date) ซ่อนออเดอร์รอเงิน · "วันรับงาน" = ทุกออเดอร์ (รวมรอเงิน) ยึด order_date
+  if(byCol==='paid_date'){
+    o=o.filter(r=> r.source==='gmv_ad' || (r.source!=='onhold' && !!r.paid_date) );
+  }
+  // กรองช่วงวันที่: มุมวันรับเงินยึด paid_date · มุมวันรับงานยึด order_date
   if(orderFilter.from||orderFilter.to){
-    o=o.filter(function(r){var eff=(byCol==='paid_date'?(r.paid_date||r.order_date):(r[byCol]||r.order_date))||'';
+    o=o.filter(function(r){var eff=(byCol==='paid_date'?r.paid_date:(r.order_date||r.paid_date))||'';
       if(orderFilter.from&&eff<orderFilter.from)return false;
       if(orderFilter.to&&eff>orderFilter.to)return false;return true;});
   }
@@ -476,6 +485,7 @@ async function renderOrders(){
     <button class="btn-sm btn-ghost" id="fClear">ล้างตัวกรอง</button>
     <span class="muted" style="font-size:12px">${orderFilter.from||orderFilter.to?`กำลังดู ${orderFilter.from||'เริ่มต้น'} → ${orderFilter.to||'ล่าสุด'} · `:'ทั้งหมด '}${incomeO.length+onholdO.length} ออเดอร์${cancelO.length?` · ยกเลิก ${cancelO.length} (ไม่นับ)`:''}</span>
   </div>
+  ${byCol==='paid_date'&&hiddenOnhold?`<div class="card" style="margin-bottom:14px;border-color:var(--amber);background:rgba(255,176,32,.08);font-size:12.5px">⏳ มีออเดอร์ <b>รอเงิน ${hiddenOnhold} รายการ</b> ที่ยังไม่ได้รับเงิน — ไม่แสดงในมุมนี้ · สลับไปดูที่ <b>"กรองตาม → วันที่รับงาน"</b> เพื่อเห็นออเดอร์ล่าสุดที่เพิ่งเข้ามา</div>`:''}
   <div class="stat-grid" style="margin-bottom:16px">
     <div class="card stat" style="border-color:var(--green)"><div class="k">💰 เงินเข้าจริง (${incomeO.length} ออเดอร์)</div><div class="v pos" style="font-size:20px">${baht(received)}</div></div>
     <div class="card stat" style="border-color:var(--amber)"><div class="k">⏳ เงินรอเข้า ประมาณ (${onholdO.length} ออเดอร์)</div><div class="v" style="font-size:20px;color:var(--amber)">${baht(pendingEst)}</div></div>
@@ -829,6 +839,7 @@ async function parseIncome(ws,filename,ordersRows){
   }
   const parsed=[]; const skippedSku={}; const newSkus={};   // SKU ที่ยังไม่มีสินค้าในทีม + ข้อมูลไว้สร้างสินค้าใหม่
   const heldBySku={};   // ออเดอร์ของ SKU ใหม่ (พักไว้ ให้เลือกเอาเข้าทีหลัง)
+  const existing=await existingOrderNos();   // order_no ที่มีใน DB แล้ว → บังคับอัปเดต ไม่ต้องถามเป็นสินค้าใหม่
   rows.forEach(r=>{
     const type=cleanVal(r[H.type]); if(!type)return;
     const isGmv=/GMV/.test(type)&&!/คำสั่งซื้อ/.test(type);
@@ -855,6 +866,13 @@ async function parseIncome(ws,filename,ordersRows){
     if(!attributed){
       const candSku=sku||parseProdDetail(r[H.prod]).sku;
       if(candSku&&isIgnored(candSku)){skippedSku['🚫 '+candSku]=(skippedSku['🚫 '+candSku]||0)+1;return;}   // ไม่เอาถาวร
+      if(oid&&existing.has(String(oid))){   // ★ เคยอยู่ในระบบ (เช่น เคยรอเงิน) → อัปเดตเป็น "รับเงินแล้ว" เสมอ ไม่ถามเป็นสินค้าใหม่
+        parsed.push({source:'income',order_no:oid,order_date:parseDate(r[H.date]),paid_date:parseDate(r[H.paid]),
+          created_time:(orderMap&&orderMap[oid]?orderMap[oid].ct:null),sku:sku||candSku||null,product_name:skuName[candSku]||null,qty:1,
+          gross_sales:rev,product_cost:0,commission_fee:comm,transaction_fee:tr,affiliate_fee:aff,growth_fee:gr,infra_fee:inf,
+          cod_fee:0,shipping_fee:sh,ads_cost:0,vat_amount:0,other_fee:other,refund:0,net:rev-comm-tr-aff-gr-inf-sh-other});
+        return;
+      }
       if(candSku&&rev>0){
         newSkus[candSku]={sku:candSku,name:skuName[candSku]||null,price:rev,n:(newSkus[candSku]?newSkus[candSku].n:0)+1};
         (heldBySku[candSku]=heldBySku[candSku]||[]).push({source:'income',order_no:oid||null,order_date:parseDate(r[H.date]),paid_date:parseDate(r[H.paid]),
@@ -891,11 +909,12 @@ async function parseOnhold(ws,filename){
   const costBySku={},nameBySku={};
   (prods||[]).forEach(p=>{if(p.sku)String(p.sku).split(',').forEach(s=>{const k=cleanVal(s);if(k){costBySku[k]=Number(p.cost_price);nameBySku[k]=p.name;}});});
   const parsed=[]; const skippedSku={}; const newSkus={}; const heldBySku={};
+  const existing=await existingOrderNos();
   for(let i=hi+1;i<aoa.length;i++){
     const r=aoa[i], type=cleanVal(r[C.type]); if(!/คำสั่งซื้อ/.test(type))continue;
     const oid=cleanVal(r[C.id]), rev=n(r[C.rev]), est=n(r[C.est]), sku=cleanVal(r[C.sku])||null, qty=n(r[C.qty])||1;
     if(sku&&isIgnored(sku)){skippedSku['🚫 '+sku]=(skippedSku['🚫 '+sku]||0)+1;continue;}   // ไม่เอาถาวร
-    if(sku&&costBySku[sku]==null){
+    if(sku&&costBySku[sku]==null&&!(oid&&existing.has(String(oid)))){   // ★ ของใหม่จริงเท่านั้นถึงพักไว้ · ถ้าเคยอยู่ในระบบให้ผ่านไปอัปเดต
       skippedSku[sku]=(skippedSku[sku]||0)+1;
       newSkus[sku]={sku,name:cleanVal(r[C.name])||null,price:rev,n:(newSkus[sku]?newSkus[sku].n:0)+1};
       (heldBySku[sku]=heldBySku[sku]||[]).push({source:'onhold',order_no:oid||null,order_date:parseDate(r[C.created]),paid_date:null,created_time:null,

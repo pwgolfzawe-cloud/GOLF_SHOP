@@ -1,0 +1,1109 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>TikTok Cost Manager — บริหารต้นทุนขาย</title>
+<style>
+  :root{
+    --bg:#0b0d12; --panel:#151922; --panel2:#1c2130; --line:#262c3a;
+    --text:#e8ecf4; --muted:#8b94a7; --brand:#00f2ea; --brand2:#ff0050;
+    --green:#25d366; --red:#ff5c6c; --amber:#ffb020; --radius:14px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,"Segoe UI",Roboto,"Sarabun",system-ui,sans-serif;
+    background:var(--bg);color:var(--text);font-size:14px;line-height:1.5}
+  a{color:var(--brand);text-decoration:none}
+  input,select,button,textarea{font-family:inherit;font-size:14px}
+  input,select,textarea{width:100%;padding:10px 12px;background:var(--panel2);
+    border:1px solid var(--line);border-radius:10px;color:var(--text);outline:none}
+  input:focus,select:focus{border-color:var(--brand)}
+  label{display:block;font-size:12px;color:var(--muted);margin:10px 0 5px}
+  button{cursor:pointer;border:none;border-radius:10px;padding:10px 16px;font-weight:600;
+    background:var(--brand);color:#00201f;transition:.15s}
+  button:hover{filter:brightness(1.08)}
+  button:disabled{opacity:.5;cursor:not-allowed}
+  .btn-ghost{background:transparent;color:var(--text);border:1px solid var(--line)}
+  .btn-pink{background:var(--brand2);color:#fff}
+  .btn-sm{padding:6px 10px;font-size:12px}
+  .btn-danger{background:transparent;border:1px solid var(--red);color:var(--red)}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:20px}
+  .muted{color:var(--muted)}
+  .row{display:flex;gap:12px;flex-wrap:wrap}
+  .grid{display:grid;gap:14px}
+  table{width:100%;border-collapse:collapse}
+  th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);white-space:nowrap}
+  th{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);font-weight:600}
+  td.num,th.num{text-align:right}
+  .pill{display:inline-block;padding:2px 9px;border-radius:999px;font-size:11px;font-weight:600}
+  .pos{color:var(--green)} .neg{color:var(--red)}
+  .badge-pos{background:rgba(37,211,102,.12);color:var(--green)}
+  .badge-neg{background:rgba(255,92,108,.12);color:var(--red)}
+  /* ---- auth ---- */
+  #auth{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;
+    background:radial-gradient(1200px 600px at 20% -10%,rgba(0,242,234,.12),transparent),
+               radial-gradient(1000px 500px at 100% 110%,rgba(255,0,80,.12),transparent),var(--bg)}
+  .auth-box{width:100%;max-width:400px}
+  .logo{font-size:22px;font-weight:800;letter-spacing:-.02em;margin-bottom:4px}
+  .logo b{color:var(--brand)} .logo i{color:var(--brand2);font-style:normal}
+  /* ---- app shell ---- */
+  #app{display:none;min-height:100vh}
+  .shell{display:grid;grid-template-columns:230px 1fr;min-height:100vh}
+  .side{background:var(--panel);border-right:1px solid var(--line);padding:18px 12px;position:sticky;top:0;height:100vh;overflow:auto}
+  .nav a{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;color:var(--muted);font-weight:600;margin-bottom:2px}
+  .nav a:hover{background:var(--panel2);color:var(--text)}
+  .nav a.active{background:linear-gradient(90deg,rgba(0,242,234,.15),transparent);color:var(--brand)}
+  .nav .ico{width:18px;text-align:center}
+  .main{padding:26px 30px;overflow:auto;max-height:100vh}
+  .page-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px}
+  .page-head h1{font-size:22px;font-weight:750}
+  .stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin-bottom:20px}
+  .stat .k{font-size:12px;color:var(--muted);margin-bottom:6px}
+  .stat .v{font-size:26px;font-weight:750}
+  .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;padding:20px;z-index:50}
+  .modal{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:24px;width:100%;max-width:520px;max-height:90vh;overflow:auto}
+  .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--panel2);
+    border:1px solid var(--line);padding:12px 18px;border-radius:12px;z-index:100;display:none;box-shadow:0 10px 40px rgba(0,0,0,.4)}
+  .tablewrap{overflow:auto;border:1px solid var(--line);border-radius:var(--radius)}
+  .empty{text-align:center;padding:50px 20px;color:var(--muted)}
+  .kv{display:grid;grid-template-columns:1fr auto;gap:8px;padding:7px 0;border-bottom:1px dashed var(--line)}
+  .spin{width:34px;height:34px;border:3px solid var(--line);border-top-color:var(--brand);border-radius:50%;animation:sp 1s linear infinite;margin:40px auto}
+  @keyframes sp{to{transform:rotate(360deg)}}
+  @media(max-width:800px){.shell{grid-template-columns:1fr}.side{display:none}.main{padding:18px}}
+</style>
+</head>
+<body>
+
+<!-- ================= AUTH ================= -->
+<div id="auth">
+  <div class="auth-box">
+    <div class="logo"><b>TikTok</b> <i>Cost</i> Manager</div>
+    <p class="muted" style="margin-bottom:22px">บริหารต้นทุน • รู้กำไรจริงหลังหัก fee ทุกบาท</p>
+    <div class="card">
+      <div id="authForm">
+        <label>อีเมล</label>
+        <input id="au_email" type="email" placeholder="you@email.com" autocomplete="email"/>
+        <label>รหัสผ่าน</label>
+        <input id="au_pass" type="password" placeholder="••••••••" autocomplete="current-password"/>
+        <div id="au_nameWrap" style="display:none">
+          <label>ชื่อของคุณ</label>
+          <input id="au_name" placeholder="เช่น กอล์ฟ"/>
+        </div>
+        <button id="au_submit" style="width:100%;margin-top:18px">เข้าสู่ระบบ</button>
+        <p id="au_err" class="neg" style="margin-top:10px;font-size:13px"></p>
+        <p class="muted" style="margin-top:14px;text-align:center">
+          <span id="au_toggleTxt">ยังไม่มีบัญชี?</span>
+          <a href="#" id="au_toggle">สมัครสมาชิก</a>
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ================= APP ================= -->
+<div id="app">
+  <div class="shell">
+    <aside class="side">
+      <div class="logo" style="font-size:17px;padding:6px 12px 16px"><b>TT</b> <i>Cost</i></div>
+      <nav class="nav" id="nav">
+        <a href="#/dashboard"><span class="ico">📊</span> แดชบอร์ด</a>
+        <a href="#/orders"><span class="ico">🧾</span> ออเดอร์</a>
+        <a href="#/import"><span class="ico">⬆️</span> นำเข้าไฟล์</a>
+        <a href="#/products"><span class="ico">📦</span> สินค้า & สต๊อก</a>
+        <a href="#/expenses"><span class="ico">💸</span> ค่าใช้จ่าย</a>
+        <a href="#/team"><span class="ico">👥</span> ทีม</a>
+      </nav>
+      <div style="position:absolute;bottom:16px;left:12px;right:12px">
+        <div id="teamSwitchWrap" style="margin-bottom:8px"></div>
+        <div class="muted" id="whoami" style="font-size:12px;padding:0 12px 8px"></div>
+        <button class="btn-ghost btn-sm" style="width:100%" id="btnLogout">ออกจากระบบ</button>
+      </div>
+    </aside>
+    <main class="main" id="view"><div class="spin"></div></main>
+  </div>
+</div>
+
+<div class="modal-bg" id="modalBg"><div class="modal" id="modal"></div></div>
+<div class="toast" id="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script>
+/* ============================================================
+   CONFIG — Supabase (แก้ 2 บรรทัดนี้ถ้าย้าย project)
+   ============================================================ */
+const SUPABASE_URL = "https://lrxjngcsqtrvevbyjqdb.supabase.co";
+const SUPABASE_KEY = "sb_publishable_ux64PPJ-OWwBDk5slbyogA_z8IHDle0";
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+/* ============================================================
+   STATE + HELPERS
+   ============================================================ */
+const state = { session:null, profile:null, team:null, fees:null };
+const $ = s => document.querySelector(s);
+const el = (h)=>{const t=document.createElement('template');t.innerHTML=h.trim();return t.content.firstChild;};
+const baht = n => "฿"+ (Number(n||0)).toLocaleString('th-TH',{minimumFractionDigits:2,maximumFractionDigits:2});
+const num = n => (Number(n||0)).toLocaleString('th-TH',{maximumFractionDigits:2});
+const esc = s => String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function toast(msg,ok=true){const t=$("#toast");t.textContent=msg;t.style.borderColor=ok?'var(--green)':'var(--red)';t.style.display='block';clearTimeout(t._t);t._t=setTimeout(()=>t.style.display='none',2600);}
+function modal(html){$("#modal").innerHTML=html;$("#modalBg").style.display='flex';}
+function closeModal(){$("#modalBg").style.display='none';}
+$("#modalBg").addEventListener('click',e=>{if(e.target.id==='modalBg')closeModal();});
+
+/* ============================================================
+   AUTH
+   ============================================================ */
+let authMode='login';
+$("#au_toggle").addEventListener('click',e=>{
+  e.preventDefault();
+  authMode = authMode==='login' ? 'signup':'login';
+  const su = authMode==='signup';
+  $("#au_nameWrap").style.display = su?'block':'none';
+  $("#au_submit").textContent = su?'สมัครสมาชิก':'เข้าสู่ระบบ';
+  $("#au_toggleTxt").textContent = su?'มีบัญชีแล้ว?':'ยังไม่มีบัญชี?';
+  $("#au_toggle").textContent = su?'เข้าสู่ระบบ':'สมัครสมาชิก';
+  $("#au_err").textContent='';
+});
+$("#au_submit").addEventListener('click',doAuth);
+$("#au_pass").addEventListener('keydown',e=>{if(e.key==='Enter')doAuth();});
+async function doAuth(){
+  const email=$("#au_email").value.trim(), pass=$("#au_pass").value;
+  const err=$("#au_err"); err.textContent='';
+  if(!email||!pass){err.textContent='กรอกอีเมลและรหัสผ่าน';return;}
+  $("#au_submit").disabled=true;
+  try{
+    if(authMode==='signup'){
+      const {data,error}=await sb.auth.signUp({email,password:pass});
+      if(error) throw error;
+      state._pendingName=$("#au_name").value.trim();
+      if(!data.session){toast('สมัครสำเร็จ! ลองเข้าสู่ระบบได้เลย');authMode='login';$("#au_submit").textContent='เข้าสู่ระบบ';$("#au_nameWrap").style.display='none';$("#au_submit").disabled=false;return;}
+    }else{
+      const {error}=await sb.auth.signInWithPassword({email,password:pass});
+      if(error) throw error;
+    }
+  }catch(ex){err.textContent=translate(ex.message);}
+  $("#au_submit").disabled=false;
+}
+function translate(m){
+  if(/Invalid login/i.test(m)) return 'อีเมลหรือรหัสผ่านไม่ถูกต้อง';
+  if(/already registered/i.test(m)) return 'อีเมลนี้ถูกใช้แล้ว';
+  if(/at least 6/i.test(m)) return 'รหัสผ่านอย่างน้อย 6 ตัวอักษร';
+  if(/relation .* does not exist|schema/i.test(m)) return 'ยังไม่ได้ติดตั้ง schema — รัน schema.sql ใน Supabase ก่อน';
+  return m;
+}
+$("#btnLogout").addEventListener('click',async()=>{await sb.auth.signOut();location.hash='';location.reload();});
+
+sb.auth.onAuthStateChange((_e,session)=>{ state.session=session; boot(); });
+
+/* ============================================================
+   BOOT — โหลด profile/team/fees แล้วเข้าแอป
+   ============================================================ */
+let booted=false;
+async function boot(){
+  if(!state.session){ $("#auth").style.display='flex'; $("#app").style.display='none'; return; }
+  $("#auth").style.display='none'; $("#app").style.display='block';
+  await loadContext();
+  if(!state.team){ renderOnboarding(); return; }
+  if(!location.hash) location.hash='#/dashboard';
+  route();
+  if(!booted){ window.addEventListener('hashchange',route); booted=true; }
+}
+async function loadContext(){
+  const uid=state.session.user.id;
+  let {data:prof}=await sb.from('profiles').select('*').eq('id',uid).maybeSingle();
+  if(!prof){
+    await sb.from('profiles').insert({id:uid,full_name:state._pendingName||state.session.user.email.split('@')[0]});
+    ({data:prof}=await sb.from('profiles').select('*').eq('id',uid).maybeSingle());
+  }
+  state.profile=prof;
+  if(prof&&prof.team_id){
+    const {data:team}=await sb.from('teams').select('*').eq('id',prof.team_id).maybeSingle();
+    state.team=team;
+    const {data:fees}=await sb.from('fee_settings').select('*').eq('team_id',prof.team_id).maybeSingle();
+    state.fees=fees;
+  }else{ state.team=null; }
+  const {data:myTeams}=await sb.from('teams').select('*').eq('owner_id',uid).order('created_at');
+  state.myTeams=myTeams||[];
+  $("#whoami").textContent=(prof?.full_name||'')+' · '+(state.team?.name||'');
+  renderTeamSwitch();
+}
+// ตัวสลับ/สร้างทีม (ร้าน) ในแถบซ้าย
+function renderTeamSwitch(){
+  const wrap=$("#teamSwitchWrap"); if(!wrap)return;
+  const ts=state.myTeams||[];
+  wrap.innerHTML=`<label style="font-size:10px;color:var(--muted);margin:0 0 3px;display:block">🏪 ทีม/ร้าน</label>
+    <select id="teamSwitch" style="padding:7px 8px;font-size:13px">
+      ${ts.map(t=>`<option value="${t.id}" ${t.id===state.team?.id?'selected':''}>${esc(t.name)}</option>`).join('')}
+      <option value="__new__">＋ สร้างทีมใหม่…</option>
+    </select>`;
+  $("#teamSwitch").onchange=async(e)=>{
+    const v=e.target.value, uid=state.session.user.id;
+    if(v==='__new__'){
+      const name=(prompt('ชื่อทีม/ร้านใหม่:')||'').trim();
+      if(!name){renderTeamSwitch();return;}
+      const {data:t,error}=await sb.from('teams').insert({name,owner_id:uid}).select().single();
+      if(error){toast(translate(error.message),false);renderTeamSwitch();return;}
+      await sb.from('profiles').update({team_id:t.id,role:'owner'}).eq('id',uid);
+      await sb.from('fee_settings').insert({team_id:t.id});
+      toast('สร้างทีม '+t.name+' แล้ว');
+    }else{
+      await sb.from('profiles').update({team_id:v}).eq('id',uid);
+    }
+    await loadContext(); location.hash='#/dashboard'; route();
+  };
+}
+
+/* ============================================================
+   ONBOARDING — สร้างทีม หรือ เข้าร่วมทีม
+   ============================================================ */
+function renderOnboarding(){
+  $("#view").innerHTML=`
+  <div style="max-width:460px;margin:8vh auto">
+    <h1 style="font-size:24px;margin-bottom:6px">ยินดีต้อนรับ 👋</h1>
+    <p class="muted" style="margin-bottom:20px">เริ่มต้นด้วยการสร้างทีมของคุณ หรือเข้าร่วมทีมที่มีอยู่</p>
+    <div class="card" style="margin-bottom:14px">
+      <b>สร้างทีมใหม่</b>
+      <label>ชื่อร้าน / ทีม</label>
+      <input id="ob_team" placeholder="เช่น Golf-Shopp"/>
+      <button id="ob_create" style="width:100%;margin-top:14px">สร้างทีม</button>
+    </div>
+    <div class="card">
+      <b>เข้าร่วมทีม</b>
+      <label>รหัสทีม (Team ID จากหัวหน้าทีม)</label>
+      <input id="ob_join" placeholder="วางรหัสทีมที่นี่"/>
+      <button class="btn-ghost" id="ob_joinBtn" style="width:100%;margin-top:14px">เข้าร่วม</button>
+    </div>
+    <p id="ob_err" class="neg" style="margin-top:12px"></p>
+  </div>`;
+  $("#ob_create").onclick=async()=>{
+    const name=$("#ob_team").value.trim(); if(!name){$("#ob_err").textContent='ใส่ชื่อทีม';return;}
+    $("#ob_create").disabled=true;
+    const uid=state.session.user.id;
+    const {data:team,error}=await sb.from('teams').insert({name,owner_id:uid}).select().single();
+    if(error){$("#ob_err").textContent=translate(error.message);$("#ob_create").disabled=false;return;}
+    await sb.from('profiles').update({team_id:team.id,role:'owner'}).eq('id',uid);
+    await sb.from('fee_settings').insert({team_id:team.id});
+    toast('สร้างทีมสำเร็จ');await loadContext();location.hash='#/dashboard';route();
+  };
+  $("#ob_joinBtn").onclick=async()=>{
+    const id=$("#ob_join").value.trim(); if(!id){$("#ob_err").textContent='ใส่รหัสทีม';return;}
+    const uid=state.session.user.id;
+    const {error}=await sb.from('profiles').update({team_id:id,role:'member'}).eq('id',uid);
+    if(error){$("#ob_err").textContent='เข้าร่วมไม่สำเร็จ ตรวจรหัสทีมอีกครั้ง';return;}
+    toast('เข้าร่วมทีมสำเร็จ');await loadContext();location.hash='#/dashboard';route();
+  };
+}
+
+/* ============================================================
+   ROUTER
+   ============================================================ */
+const routes={
+  '/dashboard':renderDashboard,'/orders':renderOrders,'/import':renderImport,
+  '/products':renderProducts,'/expenses':renderExpenses,'/team':renderTeam,
+};
+const EXP_SUGGEST=['ต้นทุนสินค้า','กล่อง','เทปกาว','บับเบิ้ล','ซองไปรษณีย์','สติกเกอร์/ใบปะหน้า','Ads TikTok (ยิงแอด)','ค่าการตลาด/โฆษณา','อุปกรณ์/เครื่องมือ','ขนส่งเข้าคลัง','อื่นๆ'];
+// บัญชีดำ SKU ที่เลิกขาย (ถ้วยมัทฉะ) — import แล้วข้ามอัตโนมัติ ไม่ให้เด้งกลับ
+const IGNORE_SKUS=new Set(['1736486158782465330','1736213839117518130','1736486158782596402','1736213839117583666','1736492816295429426','1736492816295560498','1736492816295626034','1736492816295691570']);
+function route(){
+  const path=(location.hash.replace('#','')||'/dashboard').split('?')[0];
+  document.querySelectorAll('#nav a').forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+path));
+  (routes[path]||renderDashboard)();
+}
+function loading(){$("#view").innerHTML='<div class="spin"></div>';}
+
+/* ============================================================
+   DASHBOARD
+   ============================================================ */
+async function renderDashboard(){
+  loading();
+  const [{data:orders},{data:exps}]=await Promise.all([
+    sb.from('orders').select('*').order('order_date',{ascending:true}),
+    sb.from('expenses').select('amount,category')
+  ]);
+  const o=(orders||[]).filter(r=>r.source!=='onhold');   // ไม่รวมออเดอร์รอเงิน (ยอดประมาณ ยังไม่เข้าจริง)
+  const sum=k=>o.reduce((a,r)=>a+Number(r[k]||0),0);
+  const sales=sum('gross_sales'), profit=sum('net_profit')+sum('product_cost'); // ไม่รวมต้นทุนสินค้า (กอล์ฟกรอกเองในค่าใช้จ่าย)
+  const feesTotal=sum('commission_fee')+sum('transaction_fee')+sum('affiliate_fee')+sum('growth_fee')+sum('infra_fee')+sum('cod_fee')+sum('shipping_fee')+sum('vat_amount')+sum('other_fee'); // fee TikTok (ไม่รวมค่าโฆษณา)
+  const gmvTotal=sum('ads_cost');                                      // ค่าโฆษณา GMV Max จากไฟล์การเงิน
+  const cogs=sum('product_cost');
+  const isAd=c=>/ads|โฆษณา|gmv|โปรโมท|ยิงแอด|advertis/i.test(c||'');
+  const adsExp=(exps||[]).filter(r=>isAd(r.category)).reduce((a,r)=>a+Number(r.amount||0),0);      // Ads TikTok ที่ลงเอง
+  const opexNonAd=(exps||[]).filter(r=>!isAd(r.category)).reduce((a,r)=>a+Number(r.amount||0),0);   // ค่าใช้จ่ายดำเนินงาน (ไม่รวม ads)
+  const allExpenses=opexNonAd+adsExp+gmvTotal;                        // ค่าใช้จ่ายทั้งหมด (รวม GMV Max + Ads + กล่อง/เทป)
+  const grossBeforeOpex=profit+gmvTotal;                              // กำไรก่อนหักค่าใช้จ่าย = ยอดขาย − fee − ต้นทุน
+  const finalNet=profit-adsExp-opexNonAd;                             // กำไรสุทธิสุดท้าย = grossBeforeOpex − allExpenses
+  const margin= sales? (finalNet/sales*100):0;
+  const paidReceived=o.filter(r=>r.source!=='gmv_ad').reduce((a,r)=>a+Number(r.net_profit||0)+Number(r.product_cost||0),0); // เงินเข้าจริงรวม (payout)
+  const paidCount=o.filter(r=>r.source!=='gmv_ad'&&Number(r.gross_sales)>0).length;   // ไม่นับออเดอร์ยกเลิก (ยอด 0)
+  const orderCount=o.filter(r=>r.source!=='gmv_ad'&&Number(r.gross_sales)>0).length;
+
+  // group by date
+  const byDate={};
+  o.forEach(r=>{const d=r.order_date||'—';byDate[d]=byDate[d]||{s:0,p:0};byDate[d].s+=Number(r.gross_sales||0);byDate[d].p+=Number(r.net_profit||0);});
+  const dates=Object.keys(byDate).sort();
+  // top products
+  const byProd={};
+  o.forEach(r=>{if(r.source==='gmv_ad')return;const k=r.product_name||r.sku||'ไม่ระบุ';byProd[k]=byProd[k]||{p:0,q:0};byProd[k].p+=Number(r.net_profit||0);byProd[k].q+=Number(r.qty||0);});
+  const top=Object.entries(byProd).sort((a,b)=>b[1].p-a[1].p).slice(0,5);
+
+  $("#view").innerHTML=`
+  <div class="page-head"><h1>แดชบอร์ด</h1>
+    <span class="muted">${orderCount} ออเดอร์</span></div>
+  <div class="stat-grid">
+    <div class="card stat"><div class="k">1 · ยอดขายรวม</div><div class="v">${baht(sales)}</div></div>
+    <div class="card stat"><div class="k">2 · กำไรก่อนหักค่าใช้จ่าย<br/><span style="font-size:10px">หลังหัก fee (ไม่รวมต้นทุนสินค้า)</span></div><div class="v ${grossBeforeOpex>=0?'pos':'neg'}" style="font-size:21px">${baht(grossBeforeOpex)}</div></div>
+    <div class="card stat" style="border-color:${finalNet>=0?'var(--green)':'var(--red)'}"><div class="k">3 · กำไรสุทธิสุดท้าย</div><div class="v ${finalNet>=0?'pos':'neg'}">${baht(finalNet)}</div><div class="k" style="margin-top:4px">margin ${num(margin)}%</div></div>
+    <div class="card stat"><div class="k">4 · ค่าธรรมเนียม TikTok</div><div class="v" style="color:var(--amber);font-size:20px">${baht(feesTotal)}</div></div>
+    <div class="card stat"><div class="k">5 · ค่าใช้จ่าย<br/><span style="font-size:10px">รวมต้นทุนสินค้า + GMV + โฆษณา + กล่อง/เทป</span></div><div class="v" style="color:var(--amber);font-size:20px">${baht(allExpenses)}</div></div>
+    <div class="card stat" style="border-color:var(--brand)"><div class="k">💰 เงินเข้าจริง (payout)<br/><span style="font-size:10px">${paidCount} ออเดอร์</span></div><div class="v" style="color:var(--brand);font-size:20px">${baht(paidReceived)}</div></div>
+  </div>
+  <div class="grid" style="grid-template-columns:1.5fr 1fr">
+    <div class="card"><b>ยอดขาย vs กำไร รายวัน</b><canvas id="chart" height="140" style="margin-top:12px"></canvas></div>
+    <div class="card"><b>สินค้าทำกำไรสูงสุด</b>
+      <div style="margin-top:12px">${top.length?top.map(([n,v])=>`
+        <div class="kv"><span>${esc(n)} <span class="muted">×${num(v.q)}</span></span>
+        <b class="${v.p>=0?'pos':'neg'}">${baht(v.p)}</b></div>`).join(''):'<p class="muted">ยังไม่มีข้อมูล</p>'}</div>
+    </div>
+  </div>`;
+
+  if(dates.length){
+    new Chart($("#chart"),{type:'bar',data:{labels:dates,datasets:[
+      {label:'ยอดขาย',data:dates.map(d=>byDate[d].s),backgroundColor:'rgba(0,242,234,.5)'},
+      {type:'line',label:'กำไรสุทธิ',data:dates.map(d=>byDate[d].p),borderColor:'#ff0050',backgroundColor:'#ff0050',tension:.3}
+    ]},options:{plugins:{legend:{labels:{color:'#8b94a7'}}},scales:{
+      x:{ticks:{color:'#8b94a7'},grid:{color:'#262c3a'}},y:{ticks:{color:'#8b94a7'},grid:{color:'#262c3a'}}}}});
+  }
+  if(!orderCount){$("#view").querySelector('.grid').insertAdjacentHTML('afterend',
+    '<div class="empty">ยังไม่มีออเดอร์ — ไปที่ <a href="#/import">นำเข้าไฟล์</a> หรือ <a href="#/orders">เพิ่มออเดอร์</a></div>');}
+}
+
+/* ============================================================
+   FEE CALCULATOR — หัวใจของระบบ
+   ============================================================ */
+function calcFees({gross,qty,productCost,isCOD=true,adsOverride=null}){
+  const f=state.fees||{};
+  const commission = gross*(Number(f.commission_pct||0)/100);
+  const transaction= gross*(Number(f.transaction_pct||0)/100);
+  const growth = gross*(Number(f.growth_fee_pct||0)/100);   // ค่าธรรมเนียมสนับสนุนการเติบโต
+  const infra  = gross*(Number(f.infra_fee_pct||0)/100);    // ค่าธรรมเนียมโครงสร้างพื้นฐาน
+  const cod = isCOD? gross*(Number(f.cod_pct||0)/100):0;
+  const shipping = Number(f.shipping_cost||0);
+  const ads = adsOverride!=null? Number(adsOverride) : gross*(Number(f.ads_pct||0)/100);
+  const vat = gross*(Number(f.vat_pct||0)/100);
+  const cost = Number(productCost||0);
+  const net = gross-cost-commission-transaction-growth-infra-cod-shipping-ads-vat;
+  return {commission_fee:commission,transaction_fee:transaction,growth_fee:growth,infra_fee:infra,cod_fee:cod,shipping_fee:shipping,ads_cost:ads,vat_amount:vat,product_cost:cost,net};
+}
+
+/* ============================================================
+   ORDERS
+   ============================================================ */
+let orderFilter={from:'',to:'',by:'paid_date'};
+async function renderOrders(){
+  loading();
+  const byCol=orderFilter.by||'paid_date';
+  let q=sb.from('orders').select('*').order(byCol,{ascending:false,nullsFirst:false}).order('created_time',{ascending:false,nullsFirst:false});
+  if(orderFilter.from)q=q.gte(byCol,orderFilter.from);
+  if(orderFilter.to)q=q.lte(byCol,orderFilter.to);
+  const {data:orders}=await q.limit(1000);
+  const o=orders||[];
+  const payoutOf=r=>Number(r.net_profit||0)+Number(r.product_cost||0);   // จ่ายจริง = ยอดขาย − fee
+  const incomeO=o.filter(r=>r.source==='income'&&Number(r.gross_sales)>0);   // เข้าเงินแล้ว (settled) ไม่นับยกเลิก
+  const cancelO=o.filter(r=>(r.source==='income'||r.source==='onhold')&&Number(r.gross_sales)===0); // ยกเลิก
+  const onholdO=o.filter(r=>r.source==='onhold'&&Number(r.gross_sales)>0);   // รอเงิน (on-hold)
+  const received=incomeO.reduce((a,r)=>a+payoutOf(r),0);
+  const pendingEst=onholdO.reduce((a,r)=>a+payoutOf(r),0);
+  const adsTotal=o.filter(r=>r.source==='gmv_ad').reduce((a,r)=>a+Number(r.ads_cost||0),0);
+  $("#view").innerHTML=`
+  <div class="page-head"><h1>ออเดอร์</h1>
+    <div class="row"><button class="btn-ghost btn-sm" id="delAll">ล้างทั้งหมด</button>
+    <button id="addOrder">+ เพิ่มออเดอร์</button></div></div>
+  <div class="card" style="margin-bottom:14px;display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
+    <div><label>กรองตาม</label><select id="fBy" style="width:auto"><option value="paid_date" ${orderFilter.by==='paid_date'?'selected':''}>วันที่รับเงิน</option><option value="order_date" ${orderFilter.by==='order_date'?'selected':''}>วันที่รับงาน</option></select></div>
+    <div><label>จากวันที่</label><input type="date" id="fFrom" value="${orderFilter.from}" style="width:auto"/></div>
+    <div><label>ถึงวันที่</label><input type="date" id="fTo" value="${orderFilter.to}" style="width:auto"/></div>
+    <button class="btn-sm" id="fApply">🔍 กรอง</button>
+    <button class="btn-sm btn-ghost" id="fClear">ล้างตัวกรอง</button>
+    <span class="muted" style="font-size:12px">${orderFilter.from||orderFilter.to?`กำลังดู ${orderFilter.from||'เริ่มต้น'} → ${orderFilter.to||'ล่าสุด'} · `:'ทั้งหมด '}${incomeO.length+onholdO.length} ออเดอร์${cancelO.length?` · ยกเลิก ${cancelO.length} (ไม่นับ)`:''}</span>
+  </div>
+  <div class="stat-grid" style="margin-bottom:16px">
+    <div class="card stat" style="border-color:var(--green)"><div class="k">💰 เงินเข้าจริง (${incomeO.length} ออเดอร์)</div><div class="v pos" style="font-size:20px">${baht(received)}</div></div>
+    <div class="card stat" style="border-color:var(--amber)"><div class="k">⏳ เงินรอเข้า ประมาณ (${onholdO.length} ออเดอร์)</div><div class="v" style="font-size:20px;color:var(--amber)">${baht(pendingEst)}</div></div>
+    <div class="card stat"><div class="k">📣 ค่าโฆษณา GMV Max</div><div class="v" style="font-size:20px;color:var(--amber)">${baht(adsTotal)}</div></div>
+  </div>
+  ${o.length? `<div class="tablewrap"><table>
+    <thead><tr><th>วันที่รับงาน</th><th>วันที่รับเงิน</th><th>ออเดอร์</th><th>สถานะ</th><th>สินค้า</th><th class="num">จำนวน</th>
+    <th class="num">ยอดขาย</th><th class="num">ต้นทุน</th><th class="num">ค่า fee รวม</th>
+    <th class="num">จ่ายจริง</th><th class="num">กำไรสุทธิ</th><th></th></tr></thead><tbody>
+    ${o.map(r=>{const fee=Number(r.commission_fee)+Number(r.transaction_fee)+Number(r.affiliate_fee)+Number(r.growth_fee)+Number(r.infra_fee)+Number(r.cod_fee)+Number(r.shipping_fee)+Number(r.ads_cost)+Number(r.vat_amount)+Number(r.other_fee);
+      const isGmv=r.source==='gmv_ad', isOnhold=r.source==='onhold', isCancel=r.source==='income'&&Number(r.gross_sales)===0;
+      const badge=isGmv?'<span class="pill badge-neg">โฆษณา</span>':isOnhold?'<span class="pill" style="background:rgba(255,176,32,.18);color:var(--amber)">รอเงิน</span>':(isCancel?'<span class="pill badge-neg">ยกเลิก</span>':'<span class="pill badge-pos">สำเร็จ</span>');
+      return `<tr style="${isCancel||isGmv?'opacity:.6':''}">
+      <td style="white-space:nowrap">${esc(r.order_date||'—')}</td>
+      <td style="white-space:nowrap;color:var(--green)">${esc(r.paid_date||'—')}</td><td>${esc(r.order_no||'—')}</td>
+      <td>${badge}</td>
+      <td>${esc(r.product_name||r.sku||'—')}</td><td class="num">${num(r.qty)}</td>
+      <td class="num">${baht(r.gross_sales)}</td><td class="num">${baht(r.product_cost)}</td>
+      <td class="num" style="color:var(--amber)">${baht(fee)}</td>
+      <td class="num"><b>${baht(payoutOf(r))}</b></td>
+      <td class="num ${r.net_profit>=0?'pos':'neg'}"><b>${baht(r.net_profit)}</b></td>
+      <td><button class="btn-sm btn-danger delOne" data-id="${r.id}">ลบ</button></td></tr>`;}).join('')}
+    </tbody></table></div>`
+  : '<div class="empty">ยังไม่มีออเดอร์</div>'}`;
+
+  $("#addOrder").onclick=orderModal;
+  $("#fApply").onclick=()=>{orderFilter={from:$("#fFrom").value,to:$("#fTo").value,by:$("#fBy").value};renderOrders();};
+  $("#fClear").onclick=()=>{orderFilter={from:'',to:'',by:$("#fBy").value};renderOrders();};
+  $("#delAll").onclick=async()=>{if(!confirm('ลบออเดอร์ทั้งหมดของทีม?'))return;
+    await sb.from('orders').delete().eq('team_id',state.team.id);toast('ลบแล้ว');renderOrders();};
+  document.querySelectorAll('.delOne').forEach(b=>b.onclick=async()=>{
+    await sb.from('orders').delete().eq('id',b.dataset.id);toast('ลบแล้ว');renderOrders();});
+}
+async function orderModal(){
+  const {data:prods}=await sb.from('products').select('*').eq('active',true).order('name');
+  const f=state.fees||{};
+  modal(`<h2 style="margin-bottom:4px">เพิ่มออเดอร์</h2>
+  <p class="muted" style="font-size:12px;margin-bottom:14px">ระบบคำนวณ fee อัตโนมัติจากค่าที่ตั้งไว้ (คอม ${num(f.commission_pct)}% · ธุรกรรม ${num(f.transaction_pct)}% · COD ${num(f.cod_pct)}%)</p>
+  <div class="row"><div style="flex:1"><label>วันที่</label><input id="o_date" type="date" value="${new Date().toISOString().slice(0,10)}"/></div>
+  <div style="flex:1"><label>เลขออเดอร์</label><input id="o_no" placeholder="ไม่บังคับ"/></div></div>
+  <label>สินค้า</label>
+  <select id="o_prod"><option value="">— ระบุเอง —</option>
+    ${(prods||[]).map(p=>`<option value="${p.id}" data-cost="${p.cost_price}" data-name="${esc(p.name)}" data-sku="${esc(p.sku||'')}">${esc(p.name)} (ทุน ${baht(p.cost_price)})</option>`).join('')}</select>
+  <div class="row"><div style="flex:1"><label>ชื่อสินค้า</label><input id="o_name"/></div>
+  <div style="width:90px"><label>จำนวน</label><input id="o_qty" type="number" value="1" min="1"/></div></div>
+  <div class="row"><div style="flex:1"><label>ยอดขายรวม (฿)</label><input id="o_gross" type="number" step="0.01"/></div>
+  <div style="flex:1"><label>ต้นทุนสินค้า/ชิ้น (฿)</label><input id="o_cost" type="number" step="0.01" value="0"/></div></div>
+  <label style="display:flex;align-items:center;gap:8px;margin-top:12px"><input type="checkbox" id="o_cod" checked style="width:auto"/> เก็บเงินปลายทาง (COD)</label>
+  <div class="card" style="background:var(--panel2);margin-top:14px" id="o_preview"></div>
+  <div class="row" style="margin-top:16px;justify-content:flex-end">
+    <button class="btn-ghost" onclick="closeModal()">ยกเลิก</button>
+    <button id="o_save">บันทึก</button></div>`);
+  const upd=()=>{
+    const gross=+$("#o_gross").value||0,qty=+$("#o_qty").value||1,costEach=+$("#o_cost").value||0;
+    const c=calcFees({gross,qty,productCost:costEach*qty,isCOD:$("#o_cod").checked});
+    $("#o_preview").innerHTML=`
+      <div class="kv"><span class="muted">ต้นทุนสินค้า (${qty} ชิ้น)</span><span>${baht(c.product_cost)}</span></div>
+      <div class="kv"><span class="muted">คอม + ธุรกรรม + เติบโต + โครงสร้าง</span><span style="color:var(--amber)">${baht(c.commission_fee+c.transaction_fee+c.growth_fee+c.infra_fee)}</span></div>
+      <div class="kv"><span class="muted">COD + ค่าส่ง + โฆษณา + VAT</span><span style="color:var(--amber)">${baht(c.cod_fee+c.shipping_fee+c.ads_cost+c.vat_amount)}</span></div>
+      <div class="kv" style="border:0"><b>กำไรสุทธิ</b><b class="${c.net>=0?'pos':'neg'}" style="font-size:16px">${baht(c.net)}</b></div>`;
+  };
+  $("#o_prod").onchange=e=>{const opt=e.target.selectedOptions[0];if(opt.value){$("#o_name").value=opt.dataset.name;$("#o_cost").value=opt.dataset.cost;}upd();};
+  ['o_gross','o_qty','o_cost'].forEach(id=>$("#"+id).oninput=upd);
+  $("#o_cod").onchange=upd; upd();
+  $("#o_save").onclick=async()=>{
+    const gross=+$("#o_gross").value||0,qty=+$("#o_qty").value||1,costEach=+$("#o_cost").value||0;
+    if(!gross){toast('ใส่ยอดขาย',false);return;}
+    const c=calcFees({gross,qty,productCost:costEach*qty,isCOD:$("#o_cod").checked});
+    const opt=$("#o_prod").selectedOptions[0];
+    const {error}=await sb.from('orders').insert({
+      team_id:state.team.id,created_by:state.session.user.id,source:'manual',
+      order_no:$("#o_no").value||null,order_date:$("#o_date").value||null,
+      product_id:opt.value||null,sku:opt.dataset?.sku||null,product_name:$("#o_name").value||null,
+      qty,gross_sales:gross,product_cost:c.product_cost,commission_fee:c.commission_fee,
+      transaction_fee:c.transaction_fee,growth_fee:c.growth_fee,infra_fee:c.infra_fee,
+      cod_fee:c.cod_fee,shipping_fee:c.shipping_fee,ads_cost:c.ads_cost,vat_amount:c.vat_amount});
+    if(error){toast(translate(error.message),false);return;}
+    closeModal();toast('บันทึกออเดอร์แล้ว');renderOrders();
+  };
+}
+
+/* ============================================================
+   IMPORT — TikTok / Excel / CSV
+   ============================================================ */
+function renderImport(){
+  $("#view").innerHTML=`
+  <div class="page-head"><h1>นำเข้าไฟล์</h1></div>
+  <div class="card">
+    <p style="margin-bottom:6px"><b>เลือก 2 ไฟล์พร้อมกัน 🏆</b></p>
+    <p class="muted" style="margin-bottom:6px">1️⃣ <b>ไฟล์การเงิน (Income/รายรับ)</b> — fee จริงทุกตัว + affiliate + ค่าโฆษณา GMV<br/>
+    2️⃣ <b>ไฟล์ Orders (คำสั่งซื้อ)</b> — มี SKU ครบ 100% ให้ระบบจับคู่ต้นทุนจริงรายออเดอร์ ไม่ต้องเดา</p>
+    <p class="muted" style="font-size:12px;margin-bottom:6px">💡 กด Ctrl/Shift ค้างเพื่อเลือก 2 ไฟล์พร้อมกัน · ถ้าเลือกแค่ไฟล์การเงินไฟล์เดียวก็ได้ (ระบบจะเดาต้นทุนจากราคาแทน)</p>
+    <p class="muted" style="font-size:12px;margin-bottom:14px">⏳ <b>ไฟล์ On-hold (ออเดอร์รอเงิน)</b> — อัปได้เหมือนกัน ระบบจะแสดงเป็นสถานะ "รอเงิน" พร้อมยอดจ่ายจริงโดยประมาณ (พอปิดรอบแล้วค่อยอัปไฟล์การเงินทับ ยอดจริงจะมาแทน)</p>
+    <input type="file" id="file" accept=".xlsx,.xls,.csv" multiple/>
+  </div>
+  <div id="mapArea" style="margin-top:16px"></div>`;
+  $("#file").onchange=handleFile;
+}
+let importRows=[], importCols=[], importMeta={};
+// --- helpers เฉพาะ import ---
+function cleanVal(v){return String(v==null?'':v).replace(/\t/g,'').trim();}
+function toNum(v){return parseFloat(cleanVal(v).replace(/,/g,'').replace(/[^0-9.\-]/g,''))||0;}
+function parseDate(v){
+  if(v instanceof Date&&!isNaN(v)) return v.toISOString().slice(0,10);
+  if(typeof v==='number'&&isFinite(v)){                       // Excel serial (ไฟล์ .xlsx จริง)
+    const d=new Date(Math.round((v-25569)*86400000)); return isNaN(d)?null:d.toISOString().slice(0,10);
+  }
+  v=cleanVal(v); if(!v)return null;
+  let m=v.match(/^(\d{4})[\/-](\d{1,2})[\/-](\d{1,2})/);      // YYYY/MM/DD หรือ YYYY-MM-DD (ไฟล์ Income)
+  if(m)return `${m[1]}-${m[2].padStart(2,'0')}-${m[3].padStart(2,'0')}`;
+  m=v.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);                // DD/MM/YYYY (TikTok Orders ไทย)
+  if(m)return `${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`;
+  return null;
+}
+// แก้ !ref ของ xlsx ที่ประกาศ range ผิด (ไฟล์ Income ของ TikTok บอกแค่ 2 แถว) โดยสแกนเซลล์จริง
+function fixSheetRange(ws){
+  let mR=0,mC=0;
+  for(const k in ws){ if(k[0]==='!')continue; const mm=k.match(/^([A-Z]+)(\d+)$/); if(!mm)continue;
+    const c=XLSX.utils.decode_col(mm[1]), r=+mm[2]-1; if(r>mR)mR=r; if(c>mC)mC=c; }
+  ws['!ref']=XLSX.utils.encode_range({s:{r:0,c:0},e:{r:mR,c:mC}});
+}
+// แยก SKU + จำนวน จากช่อง "รายละเอียดสินค้าที่ขายได้" เช่น "1735796998260819250 * 1;"
+function parseProdDetail(v){
+  v=String(v==null?'':v).trim(); if(!v||v==='/')return {sku:null,qty:0};
+  let qty=0,sku=null;
+  v.split(';').forEach(p=>{const m=p.match(/(\S+)\s*\*\s*(\d+)/);if(m){if(!sku)sku=m[1];qty+=+m[2];}});
+  return {sku,qty};
+}
+function handleFile(e){
+  const files=[...e.target.files]; if(!files.length)return;
+  // อ่านทุกไฟล์ที่เลือก (รับได้ทั้งไฟล์การเงิน + ไฟล์ Orders พร้อมกัน)
+  Promise.all(files.map(f=>new Promise(res=>{
+    const rd=new FileReader();
+    rd.onload=ev=>{const wb=XLSX.read(ev.target.result,{type:'array',raw:true});wb.SheetNames.forEach(sn=>fixSheetRange(wb.Sheets[sn]));res({name:f.name,wb});};
+    rd.readAsArrayBuffer(f);
+  }))).then(list=>{
+    let incomeSheet=null,incomeName='',ordersRows=null,fallback=null,onholdSheet=null,onholdName='';
+    for(const {name,wb} of list){
+      // ไฟล์ On-hold (ออเดอร์รอเงิน)? — มีคอลัมน์ "จำนวนเงินที่ชำระโดยประมาณ"
+      let onh=null;
+      for(const sn of wb.SheetNames){
+        const rows=XLSX.utils.sheet_to_json(wb.Sheets[sn],{header:1,defval:''});
+        if(rows.some(row=>row.map(String).includes('จำนวนเงินที่ชำระโดยประมาณ'))){onh=wb.Sheets[sn];break;}
+      }
+      if(onh){onholdSheet=onh;onholdName=name;continue;}
+      // ไฟล์การเงิน (Income)?
+      let inc=null;
+      for(const sn of wb.SheetNames){
+        const h=(XLSX.utils.sheet_to_json(wb.Sheets[sn],{header:1,defval:''})[0]||[]).map(String);
+        if(h.includes('ประเภทธุรกรรม')&&h.some(x=>/แอฟฟิลิเอต/.test(x))){inc=wb.Sheets[sn];break;}
+      }
+      if(inc){incomeSheet=inc;incomeName=name;continue;}
+      // ไฟล์ Orders?
+      const ws=wb.Sheets[wb.SheetNames[0]];
+      const rows=XLSX.utils.sheet_to_json(ws,{defval:''});
+      const cols=rows.length?Object.keys(rows[0]).map(c=>c.replace(/^﻿/,'').toLowerCase().trim()):[];
+      if(cols.includes('order id')&&cols.some(c=>c==='sku id'||c==='seller sku')){ordersRows=rows;fallback=fallback||{name,rows};continue;}
+      if(!fallback)fallback={name,rows};
+    }
+    if(onholdSheet){ parseOnhold(onholdSheet,onholdName); return; }               // ออเดอร์รอเงิน
+    if(incomeSheet){ parseIncome(incomeSheet,incomeName,ordersRows); return; }   // การเงินคือหลัก
+    // ไม่มีไฟล์การเงิน → เส้นทางเดิม (TikTok Orders / ทั่วไป)
+    if(!fallback||!fallback.rows.length){toast('ไฟล์ว่างเปล่า หรือไม่รู้จักรูปแบบ',false);return;}
+    importRows=fallback.rows; importCols=Object.keys(fallback.rows[0]).map(c=>c);
+    const nm=c=>c.replace(/^﻿/,'').toLowerCase().trim();
+    const has=n=>importCols.some(c=>nm(c)===n);
+    importMeta.isTikTok = has('order id') && importCols.some(c=>/subtotal after discount/i.test(c));
+    importMeta.statusCol = importCols.find(c=>/order status/i.test(c))||'';
+    importMeta.payCol    = importCols.find(c=>/payment method/i.test(c))||'';
+    importMeta.refundCol = importCols.find(c=>/refund amount/i.test(c))||'';
+    importMeta.filename  = fallback.name;
+    renderMapping(fallback.name);
+  });
+}
+function guess(cands){return importCols.find(c=>cands.some(k=>c.toLowerCase().trim()===k))
+  ||importCols.find(c=>cands.some(k=>c.toLowerCase().includes(k)))||'';}
+function renderMapping(filename){
+  const opts=v=>`<option value="">—</option>`+importCols.map(c=>`<option value="${esc(c)}" ${c===v?'selected':''}>${esc(c)}</option>`).join('');
+  const g = importMeta.isTikTok ? {
+      date:'Created Time',no:'Order ID',sku:'SKU ID',name:'Product Name',
+      qty:'Quantity',gross:'SKU Subtotal Before Discount'  // = รายได้ผู้ขายจริง (ส่วนลดแพลตฟอร์ม TikTok ออกให้)
+    } : {
+      date:guess(['date','เวลา','วันที่','created']),no:guess(['order id','order no','เลขคำสั่ง']),
+      sku:guess(['sku id','seller sku','sku']),name:guess(['product name','ชื่อสินค้า','product']),
+      qty:guess(['quantity','qty','จำนวน']),gross:guess(['sku subtotal after discount','order amount','total','ยอด','subtotal'])
+    };
+  $("#mapArea").innerHTML=`
+  ${importMeta.isTikTok?'<div class="card" style="background:linear-gradient(90deg,rgba(0,242,234,.12),transparent);border-color:var(--brand);margin-bottom:14px"><b style="color:var(--brand)">✅ ตรวจพบไฟล์ TikTok Seller Center</b><p class="muted" style="font-size:12px;margin-top:4px">จับคู่คอลัมน์ให้อัตโนมัติแล้ว · ตัด tab ท้ายค่า · อ่านวันที่ DD/MM/YYYY · ตรวจ COD จาก Payment Method</p></div>':''}
+  <div class="card">
+    <b>จับคู่คอลัมน์</b> <span class="muted">(${importRows.length} แถวจาก ${esc(filename)})</span>
+    <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr));margin-top:12px">
+      <div><label>วันที่</label><select id="m_date">${opts(g.date)}</select></div>
+      <div><label>เลขออเดอร์</label><select id="m_no">${opts(g.no)}</select></div>
+      <div><label>SKU</label><select id="m_sku">${opts(g.sku)}</select></div>
+      <div><label>ชื่อสินค้า</label><select id="m_name">${opts(g.name)}</select></div>
+      <div><label>จำนวน</label><select id="m_qty">${opts(g.qty)}</select></div>
+      <div><label>ยอดขาย (฿)</label><select id="m_gross">${opts(g.gross)}</select></div>
+    </div>
+    <label style="display:flex;align-items:center;gap:8px;margin-top:14px"><input type="checkbox" id="m_skip" ${importMeta.statusCol?'checked':''} style="width:auto"/> ข้ามออเดอร์ที่ยกเลิก/คืนสินค้า ${importMeta.statusCol?'':'<span class="muted">(ไม่พบคอลัมน์สถานะ)</span>'}</label>
+    <label style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="m_autocod" ${importMeta.payCol?'checked':''} style="width:auto"/> ตรวจ COD อัตโนมัติจาก Payment Method ${importMeta.payCol?'':'<span class="muted">(ไม่พบ — ใช้ตัวเลือกด้านล่างแทน)</span>'}</label>
+    <label style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="m_cod" checked style="width:auto"/> ถ้าไม่ตรวจอัตโนมัติ → คิดค่า COD ทุกออเดอร์</label>
+    <label style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="m_match" checked style="width:auto"/> ดึงต้นทุนจากสินค้าที่บันทึกไว้ (match ด้วย SKU)</label>
+    <button id="preview" style="margin-top:16px">ดูตัวอย่าง + คำนวณ</button>
+  </div>
+  <div id="previewArea" style="margin-top:16px"></div>`;
+  $("#preview").onclick=previewImport;
+}
+async function previewImport(){
+  const m=id=>$("#m_"+id).value;
+  const {data:prods}=await sb.from('products').select('sku,name,cost_price');
+  const costBySku={}; (prods||[]).forEach(p=>{if(p.sku)String(p.sku).split(',').forEach(s=>{const k=cleanVal(s);if(k)costBySku[k]=Number(p.cost_price);});});
+  const blanketCOD=$("#m_cod").checked, autoCOD=$("#m_autocod").checked, doMatch=$("#m_match").checked, skipCancel=$("#m_skip").checked;
+  const {statusCol,payCol,refundCol}=importMeta;
+  let skipped=0;
+  const parsed=[];
+  importRows.forEach(r=>{
+    const status=statusCol?cleanVal(r[statusCol]):'';
+    if(skipCancel&&statusCol&&/ยกเลิก|cancel|คืน|return|refund/i.test(status)){skipped++;return;}
+    const gross=toNum(r[m('gross')]);
+    const qty=toNum(r[m('qty')])||1;
+    const sku=m('sku')?cleanVal(r[m('sku')]):'';
+    const costEach=doMatch&&costBySku[sku]!=null?costBySku[sku]:0;
+    const pay=payCol?cleanVal(r[payCol]):'';
+    const isCOD = autoCOD&&payCol ? /ปลายทาง|\bcod\b/i.test(pay) : blanketCOD;
+    const refund=refundCol?toNum(r[refundCol]):0;
+    const c=calcFees({gross,qty,productCost:costEach*qty,isCOD});
+    parsed.push({order_date:parseDate(r[m('date')]),order_no:m('no')?cleanVal(r[m('no')]):null,sku:sku||null,
+      product_name:m('name')?cleanVal(r[m('name')]):null,qty,gross_sales:gross,refund,...c,
+      net:c.net-refund, is_cod:isCOD});
+  });
+  window._parsed=parsed;
+  const tot=k=>parsed.reduce((a,r)=>a+Number(r[k]||0),0);
+  const net=parsed.reduce((a,r)=>a+r.net,0);
+  const matched=parsed.filter(r=>r.product_cost>0).length;
+  const codCount=parsed.filter(r=>r.is_cod).length;
+  $("#previewArea").innerHTML=`
+  <div class="card">
+    <div class="stat-grid" style="margin-bottom:14px">
+      <div><div class="k muted">ออเดอร์ที่จะบันทึก</div><div class="v" style="font-size:20px">${parsed.length}${skipped?` <span class="muted" style="font-size:12px">(ข้าม ${skipped})</span>`:''}</div></div>
+      <div><div class="k muted">ยอดขายรวม</div><div class="v" style="font-size:20px">${baht(tot('gross_sales'))}</div></div>
+      <div><div class="k muted">กำไรสุทธิรวม</div><div class="v ${net>=0?'pos':'neg'}" style="font-size:20px">${baht(net)}</div></div>
+      <div><div class="k muted">COD / จับคู่ต้นทุน</div><div class="v" style="font-size:20px">${codCount} / ${matched}</div></div>
+    </div>
+    ${matched<parsed.length?'<p class="muted" style="font-size:12px;margin-bottom:10px">⚠️ บางออเดอร์ยังไม่มีต้นทุน — ตั้งค่าต้นทุนใน "สินค้า" ให้ SKU ตรงกับ SKU ID แล้ว import ใหม่ กำไรจะแม่นขึ้น</p>':''}
+    <div class="tablewrap" style="max-height:340px"><table><thead><tr>
+      <th>วันที่</th><th>ออเดอร์</th><th>สินค้า</th><th class="num">จำนวน</th>
+      <th class="num">ยอดขาย</th><th class="num">ต้นทุน</th><th class="num">fee รวม</th><th class="num">กำไร</th>
+    </tr></thead><tbody>
+    ${parsed.slice(0,100).map(r=>`<tr><td>${esc(r.order_date||'—')}</td><td>${esc(r.order_no||'—')}</td>
+      <td>${esc((r.product_name||r.sku||'—').slice(0,40))}</td><td class="num">${num(r.qty)}</td>
+      <td class="num">${baht(r.gross_sales)}</td><td class="num">${baht(r.product_cost)}</td>
+      <td class="num" style="color:var(--amber)">${baht(r.commission_fee+r.transaction_fee+r.growth_fee+r.infra_fee+r.cod_fee+r.shipping_fee+r.ads_cost+r.vat_amount+r.refund)}</td>
+      <td class="num ${r.net>=0?'pos':'neg'}">${baht(r.net)}</td></tr>`).join('')}
+    </tbody></table></div>
+    ${parsed.length>100?`<p class="muted" style="margin-top:8px">แสดง 100 แถวแรก · จะบันทึกทั้งหมด ${parsed.length} แถว</p>`:''}
+    <button id="saveImport" style="margin-top:14px">✔ บันทึกเข้าระบบ ${parsed.length} ออเดอร์</button>
+  </div>`;
+  $("#saveImport").onclick=saveImport;
+}
+async function saveImport(){
+  const parsed=window._parsed; if(!parsed?.length)return;
+  $("#saveImport").disabled=true;$("#saveImport").textContent='กำลังบันทึก...';
+  const {data:batch}=await sb.from('import_batches').insert({team_id:state.team.id,filename:importMeta.filename||'import',source:importMeta.isTikTok?'tiktok':'excel',row_count:parsed.length,created_by:state.session.user.id}).select().single();
+  const rows=parsed.map(r=>({team_id:state.team.id,batch_id:batch?.id||null,created_by:state.session.user.id,source:'import',
+    order_no:r.order_no,order_date:r.order_date,sku:r.sku,product_name:r.product_name,qty:r.qty,
+    gross_sales:r.gross_sales,product_cost:r.product_cost,commission_fee:r.commission_fee,
+    transaction_fee:r.transaction_fee,growth_fee:r.growth_fee,infra_fee:r.infra_fee,
+    cod_fee:r.cod_fee,shipping_fee:r.shipping_fee,ads_cost:r.ads_cost,vat_amount:r.vat_amount,refund:r.refund||0}));
+  // insert in chunks
+  for(let i=0;i<rows.length;i+=200){
+    const {error}=await sb.from('orders').insert(rows.slice(i,i+200));
+    if(error){toast(translate(error.message),false);$("#saveImport").disabled=false;return;}
+  }
+  toast('นำเข้าสำเร็จ '+rows.length+' ออเดอร์');location.hash='#/dashboard';route();
+}
+
+/* ============================================================
+   IMPORT โหมด INCOME (ไฟล์การเงิน — fee จริงรายออเดอร์)
+   ============================================================ */
+async function parseIncome(ws,filename,ordersRows){
+  const rows=XLSX.utils.sheet_to_json(ws,{defval:'',raw:true});
+  const H={id:'หมายเลขคำสั่งซื้อ/การปรับ',type:'ประเภทธุรกรรม',date:'เวลาที่สร้างคำสั่งซื้อ',paid:'เวลาที่ชำระค่าสั่งซื้อ',
+    payout:'จำนวนเงินที่ชำระทั้งหมด',rev:'รายได้รวม',trans:'ค่าธรรมเนียมคำสั่งซื้อ',comm:'ค่าคอมมิชชั่น TikTok Shop',
+    ship:'ยอดรวมค่าจัดส่งที่ร้านค้าจ่ายจริง',aff:'ค่าคอมมิชชั่นแอฟฟิลิเอต',
+    growth:'ค่าธรรมเนียมสนับสนุนการเติบโตของร้านค้า',infra:'ค่าธรรมเนียมโครงสร้างพื้นฐาน',prod:'รายละเอียดสินค้าที่ขายได้'};
+  const n=v=>{const x=parseFloat(String(v==null?'':v).replace(/,/g,''));return isFinite(x)?x:0;};
+  const ab=v=>Math.abs(n(v));
+  const {data:prods}=await sb.from('products').select('sku,cost_price,name,sell_price');
+  const costBySku={},nameBySku={};
+  (prods||[]).forEach(p=>{if(p.sku)String(p.sku).split(',').forEach(s=>{const k=cleanVal(s);if(k){costBySku[k]=Number(p.cost_price);nameBySku[k]=p.name;}});});
+  // fallback เดาจากราคาขาย
+  const byPrice={};
+  (prods||[]).forEach(p=>{const pr=Number(p.sell_price||0);if(pr>0){const b=byPrice[pr]||(byPrice[pr]={cost:Number(p.cost_price),names:new Set()});b.names.add(p.name);}});
+  const priceList=Object.keys(byPrice).map(Number).sort((a,b)=>b-a);
+  const priceName=pr=>{const b=byPrice[pr];if(!b)return null;return b.names.size===1?[...b.names][0]:('สินค้า ฿'+pr);};
+  // จับคู่จากไฟล์ Orders (ถ้าอัปมาด้วย): Order ID -> {cost รวมทุกไลน์, qty, ชื่อจาก SKU เด่น}
+  let orderMap=null, joined=0; const skuName={};   // ชื่อสินค้าตาม SKU (จากไฟล์ Orders)
+  if(ordersRows&&ordersRows.length){
+    orderMap={};
+    ordersRows.forEach(r=>{const oid=cleanVal(r['Order ID']);if(!oid)return;
+      const sku=cleanVal(r['SKU ID']),q=n(r['Quantity'])||0;
+      const o=orderMap[oid]||(orderMap[oid]={cost:0,qty:0,domSku:null,domQ:-1,ct:null});
+      o.cost+=(costBySku[sku]||0)*q; o.qty+=q; if(q>o.domQ){o.domQ=q;o.domSku=sku;}
+      if(sku&&!skuName[sku]){const pn=cleanVal(r['Product Name']).slice(0,18),v=cleanVal(r['Variation']).replace(/^Size\/?/i,'').slice(0,14);skuName[sku]=(pn+(v?' '+v:'')).trim();}
+      if(!o.ct){const cm=cleanVal(r['Created Time']).match(/(\d{2})\/(\d{2})\/(\d{4})\s+([\d:]+)/);if(cm)o.ct=`${cm[3]}-${cm[2]}-${cm[1]} ${cm[4]}`;}});
+  }
+  const parsed=[]; const skippedSku={}; const newSkus={};   // SKU ที่ยังไม่มีสินค้าในทีม + ข้อมูลไว้สร้างสินค้าใหม่
+  rows.forEach(r=>{
+    const type=cleanVal(r[H.type]); if(!type)return;
+    const isGmv=/GMV/.test(type)&&!/คำสั่งซื้อ/.test(type);
+    const rev=n(r[H.rev]),pay=n(r[H.payout]),ded=rev-pay,oid=cleanVal(r[H.id]);
+    const comm=ab(r[H.comm]),tr=ab(r[H.trans]),aff=ab(r[H.aff]),gr=ab(r[H.growth]),inf=ab(r[H.infra]),sh=ab(r[H.ship]);
+    if(isGmv){
+      parsed.push({source:'gmv_ad',order_no:oid||null,order_date:parseDate(r[H.date]),paid_date:parseDate(r[H.paid])||parseDate(r[H.date]),sku:null,
+        product_name:'ค่าโฆษณา GMV Max',qty:0,gross_sales:0,product_cost:0,commission_fee:0,transaction_fee:0,
+        affiliate_fee:0,growth_fee:0,infra_fee:0,cod_fee:0,shipping_fee:0,ads_cost:ded,vat_amount:0,other_fee:0,refund:0,net:-ded});
+      return;
+    }
+    const other=ded-(comm+tr+aff+gr+inf+sh);
+    let cost=0,pname=null,sku=null,qty=1;
+    if(rev>0){  // ออเดอร์ยกเลิก (รายได้ 0) = ไม่คิดทุน
+      const om=orderMap&&orderMap[oid], pd=parseProdDetail(r[H.prod]);
+      if(om){ cost=om.cost; qty=om.qty||1; sku=om.domSku; pname=nameBySku[om.domSku]||null; joined++; }          // 1) จาก Order ID (แม่นสุด)
+      else if(pd.sku&&costBySku[pd.sku]!=null){ cost=costBySku[pd.sku]*(pd.qty||1); qty=pd.qty||1; sku=pd.sku; pname=nameBySku[pd.sku]||null; } // 2) จาก SKU ในไฟล์การเงิน
+      else{ let hit=null,pr=null;                                                                                  // 3) เดาจากราคา
+        if(byPrice[rev]){hit=byPrice[rev].cost;pr=rev;} else{for(const p of priceList){if(rev>=p&&rev%p===0){hit=byPrice[p].cost*(rev/p);pr=p;break;}}}
+        if(hit!=null){cost=hit;pname=priceName(pr);} }
+    }
+    // นำเข้าเฉพาะออเดอร์ของสินค้าที่ "ทีมนี้" ขาย: ตรงจาก SKU หรือราคาใกล้เคียงเท่านั้น (กันมัทฉะ/ยกเลิก/ออเดอร์อื่นหลุดข้ามทีม)
+    const attributed=(sku&&costBySku[String(sku)]!=null)||(rev>0&&priceList.some(p=>p>0&&(Math.abs(rev-p)<=Math.max(p*0.15,5)||(rev>=p&&rev%p===0))));
+    if(!attributed){
+      const candSku=sku||parseProdDetail(r[H.prod]).sku;
+      if(candSku&&rev>0){newSkus[candSku]={sku:candSku,name:skuName[candSku]||null,price:rev,n:(newSkus[candSku]?newSkus[candSku].n:0)+1};}
+      const key=candSku?String(candSku):(rev>0?('ราคา ฿'+rev):'ยกเลิก/ไม่มีสินค้า');skippedSku[key]=(skippedSku[key]||0)+1;return;
+    }
+    parsed.push({source:'income',order_no:oid||null,order_date:parseDate(r[H.date]),paid_date:parseDate(r[H.paid]),
+      created_time:(orderMap&&orderMap[oid]?orderMap[oid].ct:null),sku,product_name:pname,qty,
+      gross_sales:rev,product_cost:cost,commission_fee:comm,transaction_fee:tr,affiliate_fee:aff,growth_fee:gr,infra_fee:inf,
+      cod_fee:0,shipping_fee:sh,ads_cost:0,vat_amount:0,other_fee:other,refund:0,net:rev-cost-comm-tr-aff-gr-inf-sh-other});
+  });
+  const existing=await existingOrderNos();
+  const dupCount=parsed.filter(r=>r.order_no&&existing.has(String(r.order_no))).length;
+  window._parsed=parsed; importMeta={isIncome:true,filename,hasOrders:!!orderMap,joined,dupCount,newCount:parsed.length-dupCount,skippedSku,newSkus:Object.values(newSkus)};
+  renderIncomePreview(parsed,filename);
+}
+async function parseOnhold(ws,filename){
+  const aoa=XLSX.utils.sheet_to_json(ws,{header:1,defval:'',raw:true});
+  const hi=aoa.findIndex(row=>row.map(x=>cleanVal(x)).includes('จำนวนเงินที่ชำระโดยประมาณ'));
+  if(hi<0){toast('อ่านไฟล์ on-hold ไม่ได้',false);return;}
+  const hdr=aoa[hi].map(x=>cleanVal(x)), col=n=>hdr.indexOf(n);
+  const C={type:col('ประเภทธุรกรรม'),id:col('หมายเลขคำสั่งซื้อ/การปรับ'),est:col('จำนวนเงินที่ชำระโดยประมาณ'),
+    created:col('วันที่สร้างคำสั่งซื้อ'),sku:col('SKU ID'),name:col('ชื่อสินค้า'),qty:col('จำนวน'),rev:col('รายได้รวม')};
+  const n=v=>{const x=parseFloat(String(v==null?'':v).replace(/,/g,''));return isFinite(x)?x:0;};
+  const {data:prods}=await sb.from('products').select('sku,cost_price,name');
+  const costBySku={},nameBySku={};
+  (prods||[]).forEach(p=>{if(p.sku)String(p.sku).split(',').forEach(s=>{const k=cleanVal(s);if(k){costBySku[k]=Number(p.cost_price);nameBySku[k]=p.name;}});});
+  const parsed=[]; const skippedSku={}; const newSkus={};
+  for(let i=hi+1;i<aoa.length;i++){
+    const r=aoa[i], type=cleanVal(r[C.type]); if(!/คำสั่งซื้อ/.test(type))continue;
+    const oid=cleanVal(r[C.id]), rev=n(r[C.rev]), est=n(r[C.est]), sku=cleanVal(r[C.sku])||null, qty=n(r[C.qty])||1;
+    if(sku&&costBySku[sku]==null){skippedSku[sku]=(skippedSku[sku]||0)+1;newSkus[sku]={sku,name:cleanVal(r[C.name])||null,price:rev,n:(newSkus[sku]?newSkus[sku].n:0)+1};continue;}
+    const cost=(sku&&costBySku[sku]!=null)?costBySku[sku]*qty:0;
+    const name=(sku&&nameBySku[sku])||cleanVal(r[C.name])||null;
+    const other=rev-est;   // ยอดหักโดยประมาณ (fee รวม) → payout = est
+    parsed.push({source:'onhold',order_no:oid||null,order_date:parseDate(r[C.created]),paid_date:null,created_time:null,
+      sku,product_name:name,qty,gross_sales:rev,product_cost:cost,commission_fee:0,transaction_fee:0,affiliate_fee:0,
+      growth_fee:0,infra_fee:0,cod_fee:0,shipping_fee:0,ads_cost:0,vat_amount:0,other_fee:other,refund:0,net:rev-cost-other});
+  }
+  const existing=await existingOrderNos();
+  const dupCount=parsed.filter(r=>r.order_no&&existing.has(String(r.order_no))).length;
+  window._parsed=parsed; importMeta={isOnhold:true,filename,dupCount,newCount:parsed.length-dupCount,skippedSku,hasOrders:true,joined:parsed.length,newSkus:Object.values(newSkus)};
+  renderIncomePreview(parsed,filename);
+}
+function renderIncomePreview(parsed,filename){
+  const oh=importMeta.isOnhold;
+  const orders=parsed.filter(r=>r.source!=='gmv_ad'), ads=parsed.filter(r=>r.source==='gmv_ad');
+  const sum=(a,k)=>a.reduce((x,r)=>x+Number(r[k]||0),0);
+  const rev=sum(orders,'gross_sales');
+  const totFee=['commission_fee','transaction_fee','affiliate_fee','growth_fee','infra_fee','shipping_fee','other_fee'].reduce((x,k)=>x+sum(orders,k),0);
+  const adsTot=sum(ads,'ads_cost'), cogs=sum(orders,'product_cost'), netAll=sum(parsed,'net');
+  const affTot=sum(orders,'affiliate_fee'), affCnt=orders.filter(r=>r.affiliate_fee>0).length;
+  $("#mapArea").innerHTML=`
+  <div class="card" style="background:linear-gradient(90deg,rgba(0,242,234,.12),transparent);border-color:var(--brand);margin-bottom:14px">
+    <b style="color:var(--brand)">✅ ${oh?'ตรวจพบไฟล์ On-hold (ออเดอร์รอเงิน)':'ตรวจพบไฟล์ Income (การเงิน TikTok)'}</b>
+    <p class="muted" style="font-size:12px;margin-top:4px">${oh?`ออเดอร์ที่ยังไม่ปิดรอบ ${orders.length} รายการ · แสดงเป็น "รอเงิน" พร้อมยอดจ่ายจริงโดยประมาณ`:`ใช้ fee จริงทุกตัวรายออเดอร์ · ${orders.length} ออเดอร์ + ค่าโฆษณา GMV ${ads.length} รายการ · reconcile ตรงเงินเข้าจริง`}</p>
+    ${oh?'':`<p style="font-size:12px;margin-top:6px;color:${importMeta.hasOrders?'var(--green)':'var(--amber)'}">${importMeta.hasOrders?`🔗 จับคู่ไฟล์ Orders แล้ว — ได้ SKU/ต้นทุนจริง ${importMeta.joined} ออเดอร์ (แม่น 100%)`:'⚠️ ไม่ได้แนบไฟล์ Orders — ระบบเดาต้นทุนจากราคาขาย (แม่น ~96%) แนะนำอัปไฟล์ Orders คู่มาด้วยเพื่อความเป๊ะ'}</p>`}
+    <p style="font-size:12px;margin-top:4px;color:var(--brand)">⚡ นำเข้าเฉพาะส่วนใหม่: <b>${importMeta.newCount} รายการใหม่</b>${importMeta.dupCount?` · ข้ามที่มีอยู่แล้ว ${importMeta.dupCount} รายการ`:' · ไม่มีข้อมูลซ้ำ'}</p>
+    ${importMeta.newSkus&&importMeta.newSkus.length?`<div style="margin-top:10px;padding:11px 12px;background:rgba(255,176,32,.08);border:1px solid var(--amber);border-radius:10px">
+      <b style="color:var(--amber);font-size:13px">🆕 พบสินค้าใหม่ที่ยังไม่มีในทีมนี้ ${importMeta.newSkus.length} รายการ</b>
+      <p class="muted" style="font-size:11px;margin:3px 0 8px">ออเดอร์กลุ่มนี้ยัง <b>ไม่ถูกนำเข้า</b> — กด "เพิ่มสินค้า" ใส่แค่ต้นทุน (ชื่อ+SKU+ราคาดึงมาให้แล้ว) เสร็จแล้ว import ไฟล์นี้ซ้ำอีกรอบ ออเดอร์จะเข้าครบ</p>
+      ${importMeta.newSkus.slice(0,25).map((s,i)=>`<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:5px 0;border-top:1px solid var(--line)">
+        <span style="font-size:12px;line-height:1.4">${esc(s.name||'สินค้าใหม่')}<br/><span class="muted" style="font-size:11px">฿${(+s.price||0).toLocaleString()} · SKU ${esc(String(s.sku).slice(0,10))}… · ${s.n} ออเดอร์</span></span>
+        <button class="addNewSku" data-i="${i}" style="flex:0 0 auto;font-size:12px;padding:6px 12px;background:var(--brand);color:#012;border:0;border-radius:8px;cursor:pointer;font-weight:600">➕ เพิ่มสินค้า</button>
+      </div>`).join('')}
+    </div>`:''}
+  </div>
+  <div class="card">
+    <div class="stat-grid" style="margin-bottom:12px">
+      <div><div class="k muted">รายได้รวม</div><div class="v" style="font-size:20px">${baht(rev)}</div></div>
+      <div><div class="k muted">ค่าธรรมเนียมจริง</div><div class="v" style="font-size:20px;color:var(--amber)">${baht(totFee)}</div></div>
+      <div><div class="k muted">ค่าโฆษณา GMV</div><div class="v" style="font-size:20px;color:var(--amber)">${baht(adsTot)}</div></div>
+      <div><div class="k muted">เงินเข้าจริง−โฆษณา${cogs?'−ต้นทุน':''}</div><div class="v ${netAll>=0?'pos':'neg'}" style="font-size:20px">${baht(netAll)}</div></div>
+    </div>
+    <div class="kv"><span class="muted">ค่าคอมแอฟฟิลิเอต (${affCnt} ออเดอร์)</span><b style="color:var(--amber)">${baht(affTot)}</b></div>
+    <div class="kv"><span class="muted">ต้นทุนสินค้าที่จับคู่ SKU ได้</span><b>${cogs?baht(cogs):'— ยังไม่ใส่ต้นทุน (ไปหน้าสินค้า)'}</b></div>
+    <div class="tablewrap" style="max-height:320px;margin-top:12px"><table><thead><tr>
+      <th>วันที่</th><th>ออเดอร์</th><th class="num">รายได้</th><th class="num">คอม</th><th class="num">แอฟฟิลิเอต</th><th class="num">เติบโต</th><th class="num">fee รวม</th><th class="num">สุทธิ</th>
+    </tr></thead><tbody>
+    ${parsed.slice(0,100).map(r=>{const f=r.commission_fee+r.transaction_fee+r.affiliate_fee+r.growth_fee+r.infra_fee+r.shipping_fee+r.other_fee+r.ads_cost;
+      return `<tr><td>${esc(r.order_date||'—')}</td><td>${esc(String(r.order_no||'—').slice(0,18))}${r.source==='gmv_ad'?' <span class="pill badge-neg">โฆษณา</span>':''}</td>
+      <td class="num">${baht(r.gross_sales)}</td><td class="num">${baht(r.commission_fee)}</td>
+      <td class="num">${r.affiliate_fee?baht(r.affiliate_fee):'—'}</td><td class="num">${baht(r.growth_fee)}</td>
+      <td class="num" style="color:var(--amber)">${baht(f)}</td>
+      <td class="num ${r.net>=0?'pos':'neg'}">${baht(r.net)}</td></tr>`;}).join('')}
+    </tbody></table></div>
+    ${parsed.length>100?`<p class="muted" style="margin-top:8px">แสดง 100 แถวแรก · บันทึกทั้งหมด ${parsed.length} รายการ</p>`:''}
+    <button id="saveIncome" style="margin-top:14px">✔ นำเข้าเฉพาะใหม่ ${importMeta.newCount} รายการ${importMeta.dupCount?` (ข้ามซ้ำ ${importMeta.dupCount})`:''}</button>
+  </div>`;
+  $("#saveIncome").onclick=()=>saveIncome(parsed,filename);
+  document.querySelectorAll('.addNewSku').forEach(b=>b.onclick=()=>{const s=importMeta.newSkus[+b.dataset.i];productModal(null,{name:s.name||'',sku:s.sku,sell_price:s.price});});
+}
+// ดึง Order ID ที่มีอยู่แล้วทั้งหมดของทีม (ไว้เช็คซ้ำ)
+async function existingOrderNos(){
+  const set=new Set(); let from=0;
+  while(true){
+    const {data,error}=await sb.from('orders').select('order_no').eq('team_id',state.team.id).range(from,from+999);
+    if(error||!data||!data.length)break;
+    data.forEach(r=>{if(r.order_no)set.add(String(r.order_no));});
+    if(data.length<1000)break; from+=1000;
+  }
+  return set;
+}
+async function saveIncome(parsed,filename){
+  const btn=$("#saveIncome"); if(btn){btn.disabled=true;btn.textContent='กำลังบันทึก...';}
+  // ถ้านำเข้า income/settled: ลบตัว "รอเงิน" (on-hold) ของออเดอร์เดียวกันก่อน → ยอดจริงมาแทนยอดประมาณ
+  const settledNos=parsed.filter(r=>r.source!=='onhold').map(r=>r.order_no).filter(Boolean);
+  for(let i=0;i<settledNos.length;i+=300){ await sb.from('orders').delete().eq('team_id',state.team.id).eq('source','onhold').in('order_no',settledNos.slice(i,i+300)); }
+  // นำเข้าเฉพาะส่วนใหม่: ข้ามออเดอร์ที่ Order ID มีอยู่แล้ว (คงข้อมูลเดิม ไม่ทับ)
+  const existing=await existingOrderNos();
+  const fresh=parsed.filter(r=>!(r.order_no&&existing.has(String(r.order_no))));
+  const dup=parsed.length-fresh.length;
+  if(!fresh.length){toast('ไม่มีข้อมูลใหม่ — ทุกออเดอร์มีอยู่แล้ว ('+dup+' รายการ)',false);if(btn){btn.disabled=false;btn.textContent='✔ ไม่มีอะไรใหม่';}return;}
+  const {data:batch}=await sb.from('import_batches').insert({team_id:state.team.id,filename:filename||'income',source:'income',row_count:fresh.length,created_by:state.session.user.id}).select().single();
+  const rows=fresh.map(r=>({team_id:state.team.id,batch_id:batch?.id||null,created_by:state.session.user.id,source:r.source,
+    order_no:r.order_no,order_date:r.order_date,paid_date:r.paid_date||null,created_time:r.created_time||null,sku:r.sku,product_name:r.product_name,qty:r.qty,gross_sales:r.gross_sales,
+    product_cost:r.product_cost,commission_fee:r.commission_fee,transaction_fee:r.transaction_fee,affiliate_fee:r.affiliate_fee,
+    growth_fee:r.growth_fee,infra_fee:r.infra_fee,cod_fee:r.cod_fee,shipping_fee:r.shipping_fee,ads_cost:r.ads_cost,
+    vat_amount:r.vat_amount,other_fee:r.other_fee,refund:r.refund}));
+  for(let i=0;i<rows.length;i+=200){
+    const {error}=await sb.from('orders').insert(rows.slice(i,i+200));
+    if(error){toast(translate(error.message),false);if(btn){btn.disabled=false;btn.textContent='ลองใหม่';}return;}
+  }
+  toast('นำเข้าใหม่ '+rows.length+' รายการ'+(dup?' (ข้ามซ้ำ '+dup+')':''));location.hash='#/dashboard';route();
+}
+
+/* ============================================================
+   PRODUCTS
+   ============================================================ */
+async function renderProducts(){
+  loading();
+  const {data:prods}=await sb.from('products').select('*').order('sort_order',{ascending:true}).order('name',{ascending:true});
+  const p=prods||[];
+  const low=p.filter(x=>x.active&&Number(x.low_stock)>0&&Number(x.stock)<=Number(x.low_stock));
+  const stockValue=p.reduce((a,x)=>a+Number(x.stock||0)*Number(x.cost_price||0),0);
+  $("#view").innerHTML=`
+  <div class="page-head"><h1>สินค้า & สต๊อก</h1><button id="addP">+ เพิ่มสินค้า</button></div>
+  ${low.length?`<div class="card" style="border-color:var(--red);background:rgba(255,92,108,.08);margin-bottom:14px">
+    ⚠️ <b>ของใกล้หมด ${low.length} รายการ:</b> ${low.map(x=>esc(x.name)+' <span class="neg">(เหลือ '+num(x.stock)+')</span>').join(' · ')}</div>`:''}
+  ${p.length?`<div class="tablewrap"><table><thead><tr><th>ชื่อสินค้า</th><th>SKU</th>
+    <th class="num">ต้นทุน/ชิ้น</th><th class="num">คงเหลือ</th><th class="num">มูลค่าสต๊อก</th><th></th></tr></thead><tbody>
+    ${p.map((r,i)=>{const lowS=Number(r.low_stock)>0&&Number(r.stock)<=Number(r.low_stock);
+      return `<tr><td style="white-space:nowrap">
+      <button class="btn-sm btn-ghost moveP" data-idx="${i}" data-dir="-1" ${i===0?'disabled':''} style="padding:4px 7px">↑</button>
+      <button class="btn-sm btn-ghost moveP" data-idx="${i}" data-dir="1" ${i===p.length-1?'disabled':''} style="padding:4px 7px">↓</button>
+      &nbsp;${esc(r.name)}${r.active?'':' <span class="pill badge-neg">ปิด</span>'}</td>
+      <td class="muted" style="font-size:11px">${esc(r.sku||'—')}</td>
+      <td class="num">${baht(r.cost_price)}</td>
+      <td class="num"><span class="pill ${lowS?'badge-neg':'badge-pos'}">${num(r.stock)}</span></td>
+      <td class="num muted">${baht(Number(r.stock)*Number(r.cost_price))}</td>
+      <td style="white-space:nowrap;text-align:right"><button class="btn-sm btn-pink stockP" data-id="${r.id}">+ เติมสต๊อก</button>
+      <button class="btn-sm btn-ghost editP" data-id="${r.id}">แก้ไข</button>
+      <button class="btn-sm btn-danger delP" data-id="${r.id}">ลบ</button></td></tr>`;}).join('')}
+    </tbody></table></div>
+    <p class="muted" style="font-size:12px;margin-top:8px">💰 มูลค่าสต๊อกรวม (เงินจมในของ) = <b>${baht(stockValue)}</b></p>`
+    :'<div class="empty">ยังไม่มีสินค้า — เพิ่มสินค้าพร้อมต้นทุน + สต๊อก</div>'}`;
+  $("#addP").onclick=()=>productModal();
+  document.querySelectorAll('.moveP').forEach(b=>b.onclick=async()=>{
+    const i=+b.dataset.idx, j=i+(+b.dataset.dir); if(j<0||j>=p.length)return;
+    const a=p[i], c=p[j];
+    await sb.from('products').update({sort_order:c.sort_order}).eq('id',a.id);
+    await sb.from('products').update({sort_order:a.sort_order}).eq('id',c.id);
+    renderProducts();
+  });
+  document.querySelectorAll('.editP').forEach(b=>b.onclick=()=>productModal(p.find(x=>x.id===b.dataset.id)));
+  document.querySelectorAll('.stockP').forEach(b=>b.onclick=()=>stockModal(p.find(x=>x.id===b.dataset.id)));
+  document.querySelectorAll('.delP').forEach(b=>b.onclick=async()=>{if(!confirm('ลบสินค้านี้?'))return;await sb.from('products').delete().eq('id',b.dataset.id);toast('ลบแล้ว');renderProducts();});
+}
+function productModal(prod, prefill){
+  const e=prod||prefill||{};
+  modal(`<h2 style="margin-bottom:14px">${prod?'แก้ไขสินค้า':'เพิ่มสินค้า'}</h2>
+  <label>ชื่อสินค้า</label><input id="p_name" value="${esc(e.name||'')}"/>
+  <label>SKU ID <span class="muted" style="font-size:10px">(เลข 19 หลักจากไฟล์ · หลายรหัสคั่นด้วย ,)</span></label><input id="p_sku" value="${esc(e.sku||'')}" placeholder="เช่น 1736486158782465330"/>
+  <div class="row"><div style="flex:1"><label>ต้นทุน/ชิ้น (฿)</label><input id="p_cost" type="number" step="0.01" value="${e.cost_price||0}"/></div>
+  <div style="flex:1"><label>ราคาขาย (฿)</label><input id="p_sell" type="number" step="0.01" value="${e.sell_price||0}"/></div></div>
+  <div class="row"><div style="flex:1"><label>สต๊อกคงเหลือ (ชิ้น)</label><input id="p_stock" type="number" step="1" value="${e.stock||0}"/></div>
+  <div style="flex:1"><label>แจ้งเตือนเมื่อเหลือ ≤</label><input id="p_low" type="number" step="1" value="${e.low_stock||0}" placeholder="0 = ปิด"/></div></div>
+  <label style="display:flex;align-items:center;gap:8px;margin-top:12px"><input type="checkbox" id="p_active" ${e.active!==false?'checked':''} style="width:auto"/> ใช้งาน</label>
+  <div class="row" style="margin-top:16px;justify-content:flex-end">
+    <button class="btn-ghost" onclick="closeModal()">ยกเลิก</button><button id="p_save">บันทึก</button></div>`);
+  $("#p_save").onclick=async()=>{
+    const newStock=+$("#p_stock").value||0, oldStock=Number(e.stock||0);
+    const payload={team_id:state.team.id,name:$("#p_name").value.trim(),sku:$("#p_sku").value.trim()||null,
+      cost_price:+$("#p_cost").value||0,sell_price:+$("#p_sell").value||0,stock:newStock,low_stock:+$("#p_low").value||0,active:$("#p_active").checked};
+    if(!prod)payload.sort_order=Math.floor(Date.now()/1000);  // สินค้าใหม่ต่อท้ายลำดับ
+    if(!payload.name){toast('ใส่ชื่อสินค้า',false);return;}
+    const {data:saved,error}=await(prod?sb.from('products').update(payload).eq('id',prod.id):sb.from('products').insert(payload)).select().single();
+    if(error){toast(translate(error.message),false);return;}
+    if(saved&&newStock!==oldStock){  // ล็อกการเปลี่ยนสต๊อก
+      await sb.from('stock_movements').insert({team_id:state.team.id,product_id:saved.id,qty:newStock-oldStock,
+        kind:prod?'adjust':'in',note:prod?'ปรับสต๊อกตอนแก้ไข':'สต๊อกตั้งต้น',stock_after:newStock,created_by:state.session.user.id});
+    }
+    closeModal();toast('บันทึกแล้ว');renderProducts();
+  };
+}
+async function stockModal(prod){
+  const {data:moves}=await sb.from('stock_movements').select('*').eq('product_id',prod.id).order('created_at',{ascending:false}).limit(8);
+  modal(`<h2 style="margin-bottom:4px">เติมสต๊อก</h2>
+  <p class="muted" style="margin-bottom:14px">${esc(prod.name)} · คงเหลือปัจจุบัน <b style="color:var(--text)">${num(prod.stock)}</b> ชิ้น</p>
+  <label>จำนวนที่เติม (ใส่เลขลบเพื่อหักออก)</label><input id="s_qty" type="number" step="1" placeholder="เช่น 100"/>
+  <label>โน้ต (ไม่บังคับ)</label><input id="s_note" placeholder="เช่น รับของจากโรงงาน ล็อต 8"/>
+  <div class="card" style="background:var(--panel2);margin-top:12px" id="s_prev"></div>
+  <div class="row" style="margin-top:14px;justify-content:flex-end">
+    <button class="btn-ghost" onclick="closeModal()">ยกเลิก</button><button id="s_save">บันทึกการเติม</button></div>
+  ${moves&&moves.length?`<div style="margin-top:18px"><b style="font-size:13px">ประวัติล่าสุด</b>
+    ${moves.map(m=>`<div class="kv"><span class="muted" style="font-size:12px">${new Date(m.created_at).toLocaleDateString('th-TH')} · ${esc(m.note||m.kind)}</span>
+    <b class="${m.qty>=0?'pos':'neg'}">${m.qty>=0?'+':''}${num(m.qty)} → ${num(m.stock_after)}</b></div>`).join('')}</div>`:''}`);
+  const upd=()=>{const q=+$("#s_qty").value||0;$("#s_prev").innerHTML=`<div class="kv" style="border:0"><span class="muted">สต๊อกหลังเติม</span><b style="font-size:16px">${num(Number(prod.stock)+q)} ชิ้น</b></div>`;};
+  $("#s_qty").oninput=upd; upd();
+  $("#s_save").onclick=async()=>{
+    const qty=+$("#s_qty").value; if(!qty){toast('ใส่จำนวน',false);return;}
+    const after=Number(prod.stock)+qty;
+    const {error}=await sb.from('products').update({stock:after}).eq('id',prod.id);
+    if(error){toast(translate(error.message),false);return;}
+    await sb.from('stock_movements').insert({team_id:state.team.id,product_id:prod.id,qty,kind:qty>=0?'in':'out',
+      note:$("#s_note").value||null,stock_after:after,created_by:state.session.user.id});
+    closeModal();toast('เติมสต๊อกแล้ว');renderProducts();
+  };
+}
+
+/* ============================================================
+   EXPENSES — ค่าใช้จ่ายดำเนินงาน (กล่อง/เทป/บับเบิ้ล ฯลฯ)
+   ============================================================ */
+async function renderExpenses(){
+  loading();
+  const [{data:exp},{data:gmv}]=await Promise.all([
+    sb.from('expenses').select('*').order('expense_date',{ascending:false}).limit(500),
+    sb.from('orders').select('order_date,created_time,ads_cost').eq('source','gmv_ad')
+  ]);
+  const e=exp||[];
+  const isAd=c=>/ads|โฆษณา|gmv|โปรโมท|ยิงแอด|advertis/i.test(c||'');
+  const adsExp=e.filter(r=>isAd(r.category)).reduce((a,r)=>a+Number(r.amount||0),0);       // Ads TikTok ที่ลงเอง
+  const opexNonAd=e.filter(r=>!isAd(r.category)).reduce((a,r)=>a+Number(r.amount||0),0);    // กล่อง/เทป (ไม่รวม ads)
+  const gmvTotal=(gmv||[]).reduce((a,r)=>a+Number(r.ads_cost||0),0);   // ค่าโฆษณา GMV Max จากไฟล์ Income
+  const grandTotal=opexNonAd+adsExp+gmvTotal;
+  // GMV Max แตกเป็นรายวันอัตโนมัติ
+  const gmvByDate={}; (gmv||[]).forEach(g=>{const d=String(g.created_time||g.order_date||'—').slice(0,10);gmvByDate[d]=(gmvByDate[d]||0)+Number(g.ads_cost||0);});
+  const gmvRows=Object.entries(gmvByDate).map(([d,amt])=>({date:d,category:'ค่าโฆษณา GMV Max',note:'ยิงแอด GMV Max รายวัน',amount:amt,auto:true}));
+  const manualRows=e.map(r=>({id:r.id,date:r.expense_date,category:r.category||'อื่นๆ',note:r.note,amount:Number(r.amount||0),auto:false}));
+  const rows=[...gmvRows,...manualRows].sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')));
+  $("#view").innerHTML=`
+  <div class="page-head"><h1>ค่าใช้จ่าย</h1><button id="addE">+ เพิ่มค่าใช้จ่าย</button></div>
+  <div class="stat-grid">
+    <div class="card stat" style="border-color:var(--amber)"><div class="k">เงินจ่ายออกรวม (รวม GMV)</div><div class="v" style="color:var(--amber)">${baht(grandTotal)}</div></div>
+    <div class="card stat"><div class="k">ค่าใช้จ่ายที่ลงเอง<br/><span style="font-size:10px">ไม่รวม Ads TikTok</span></div><div class="v" style="font-size:20px">${baht(opexNonAd)}</div></div>
+    <div class="card stat"><div class="k">ค่าโฆษณา GMV Max<br/><span style="font-size:10px">อัตโนมัติ + Ads TikTok ที่ลงเอง</span></div><div class="v" style="font-size:20px;color:var(--amber)">${baht(gmvTotal+adsExp)}</div></div>
+  </div>
+  ${rows.length?`<div class="tablewrap"><table><thead><tr><th>วันที่</th><th>หมวด</th><th>รายละเอียด</th><th class="num">จำนวนเงิน</th><th></th></tr></thead><tbody>
+    ${rows.map(r=>`<tr${r.auto?' style="background:rgba(255,176,32,.05)"':''}><td>${esc(r.date||'—')}</td>
+      <td>${esc(r.category)}${r.auto?' <span class="pill badge-neg" style="font-size:10px">อัตโนมัติ</span>':''}</td>
+      <td class="muted">${esc(r.note||'—')}</td><td class="num" style="color:var(--amber)">${baht(r.amount)}</td>
+      <td>${r.auto?'<span class="muted" style="font-size:11px">จาก TikTok</span>':`<button class="btn-sm btn-ghost editE" data-id="${r.id}">แก้</button> <button class="btn-sm btn-danger delE" data-id="${r.id}">ลบ</button>`}</td></tr>`).join('')}
+    </tbody></table></div>`:'<div class="empty">ยังไม่มีค่าใช้จ่าย — กด + เพิ่ม แล้วลงกล่อง/เทปกาว/บับเบิ้ล (ค่า GMV Max จะเด้งมารายวันเองเมื่อ import ไฟล์การเงิน)</div>'}`;
+  $("#addE").onclick=()=>expenseModal();
+  document.querySelectorAll('.editE').forEach(b=>b.onclick=()=>expenseModal(e.find(x=>x.id===b.dataset.id)));
+  document.querySelectorAll('.delE').forEach(b=>b.onclick=async()=>{await sb.from('expenses').delete().eq('id',b.dataset.id);toast('ลบแล้ว');renderExpenses();});
+}
+function expenseModal(exp){
+  const e=exp||{};
+  modal(`<h2 style="margin-bottom:14px">${exp?'แก้ไขค่าใช้จ่าย':'เพิ่มค่าใช้จ่าย'}</h2>
+  <div class="row"><div style="flex:1"><label>วันที่</label><input id="e_date" type="date" value="${e.expense_date||new Date().toISOString().slice(0,10)}"/></div>
+  <div style="flex:1"><label>จำนวนเงิน (฿)</label><input id="e_amt" type="number" step="0.01" value="${e.amount||''}"/></div></div>
+  <label>หมวด (เลือกหรือพิมพ์เองก็ได้)</label>
+  <input id="e_cat" list="e_catlist" value="${esc(e.category||'')}" placeholder="เช่น กล่อง, เทปกาว, บับเบิ้ล หรือพิมพ์เอง"/>
+  <datalist id="e_catlist">${EXP_SUGGEST.map(c=>`<option value="${esc(c)}">`).join('')}</datalist>
+  <label>รายละเอียด (ไม่บังคับ)</label><input id="e_note" value="${esc(e.note||'')}" placeholder="เช่น กล่อง 20x20 จำนวน 500 ใบ"/>
+  <div class="row" style="margin-top:16px;justify-content:flex-end">
+    <button class="btn-ghost" onclick="closeModal()">ยกเลิก</button><button id="e_save">บันทึก</button></div>`);
+  $("#e_save").onclick=async()=>{
+    const payload={team_id:state.team.id,expense_date:$("#e_date").value||null,amount:+$("#e_amt").value||0,
+      category:$("#e_cat").value.trim()||'อื่นๆ',note:$("#e_note").value||null,created_by:state.session.user.id};
+    if(!payload.amount){toast('ใส่จำนวนเงิน',false);return;}
+    const q=exp?sb.from('expenses').update(payload).eq('id',exp.id):sb.from('expenses').insert(payload);
+    const {error}=await q; if(error){toast(translate(error.message),false);return;}
+    closeModal();toast('บันทึกแล้ว');renderExpenses();
+  };
+}
+
+/* ============================================================
+   FEE SETTINGS
+   ============================================================ */
+function renderFees(){
+  const f=state.fees||{};
+  $("#view").innerHTML=`
+  <div class="page-head"><h1>ตั้งค่าค่าธรรมเนียม</h1></div>
+  <div class="card" style="max-width:560px">
+    <p class="muted" style="margin-bottom:16px">ค่าพวกนี้จะถูกใช้คำนวณกำไรอัตโนมัติทุกออเดอร์ ทั้งการเพิ่มเองและการ import</p>
+    <div class="row">
+      <div style="flex:1"><label>ค่าคอมมิชชั่น TikTok (%)</label><input id="f_comm" type="number" step="0.1" value="${f.commission_pct??5}"/></div>
+      <div style="flex:1"><label>ค่าธุรกรรม/ชำระเงิน (%)</label><input id="f_trans" type="number" step="0.1" value="${f.transaction_pct??3}"/></div>
+    </div>
+    <div class="row">
+      <div style="flex:1"><label>ค่าธรรมเนียมสนับสนุนการเติบโต (%)</label><input id="f_growth" type="number" step="0.1" value="${f.growth_fee_pct??8}"/></div>
+      <div style="flex:1"><label>ค่าธรรมเนียมโครงสร้างพื้นฐาน (%)</label><input id="f_infra" type="number" step="0.1" value="${f.infra_fee_pct??1.8}"/></div>
+    </div>
+    <div class="row">
+      <div style="flex:1"><label>ค่า COD (%)</label><input id="f_cod" type="number" step="0.1" value="${f.cod_pct??3}"/></div>
+      <div style="flex:1"><label>ค่าส่งต่อออเดอร์ (฿)</label><input id="f_ship" type="number" step="0.5" value="${f.shipping_cost??0}"/></div>
+    </div>
+    <div class="row">
+      <div style="flex:1"><label>ค่าโฆษณาเฉลี่ย (%)</label><input id="f_ads" type="number" step="0.1" value="${f.ads_pct??0}"/></div>
+      <div style="flex:1"><label>VAT (%)</label><input id="f_vat" type="number" step="0.1" value="${f.vat_pct??0}"/></div>
+    </div>
+    <div class="card" style="background:var(--panel2);margin-top:14px" id="f_total"></div>
+    <button id="f_save" style="margin-top:16px">บันทึกค่าธรรมเนียม</button>
+    <p class="muted" style="font-size:12px;margin-top:12px">💡 ค่า default ตั้งจากใบแจกแจงจริงของร้าน (คอม 9.6% · ธุรกรรม 3.21% · สนับสนุนการเติบโต 8% · โครงสร้างพื้นฐาน 1.8%) — รวม ~22.7% ปรับตามที่โดนจริงได้เลย</p>
+  </div>`;
+  const showTotal=()=>{
+    const t=(+$("#f_comm").value||0)+(+$("#f_trans").value||0)+(+$("#f_growth").value||0)+(+$("#f_infra").value||0)+(+$("#f_cod").value||0)+(+$("#f_ads").value||0)+(+$("#f_vat").value||0);
+    $("#f_total").innerHTML=`<div class="kv" style="border:0"><b>รวม fee ที่เป็น % ของยอดขาย</b><b class="${t>20?'neg':'pos'}" style="font-size:16px">${num(t)}%</b></div><p class="muted" style="font-size:11px">＊ยังไม่รวมค่าส่งแบบบาท · ตัวอย่าง: ขาย ฿100 โดน fee ฿${num(t)}</p>`;
+  };
+  ['f_comm','f_trans','f_growth','f_infra','f_cod','f_ads','f_vat'].forEach(id=>$("#"+id).oninput=showTotal); showTotal();
+  $("#f_save").onclick=async()=>{
+    const payload={team_id:state.team.id,commission_pct:+$("#f_comm").value||0,transaction_pct:+$("#f_trans").value||0,
+      growth_fee_pct:+$("#f_growth").value||0,infra_fee_pct:+$("#f_infra").value||0,
+      cod_pct:+$("#f_cod").value||0,shipping_cost:+$("#f_ship").value||0,ads_pct:+$("#f_ads").value||0,vat_pct:+$("#f_vat").value||0,updated_at:new Date().toISOString()};
+    const {error}=await sb.from('fee_settings').upsert(payload); if(error){toast(translate(error.message),false);return;}
+    state.fees=payload;toast('บันทึกค่าธรรมเนียมแล้ว');
+  };
+}
+
+/* ============================================================
+   TEAM
+   ============================================================ */
+async function renderTeam(){
+  loading();
+  const {data:members}=await sb.from('profiles').select('*').eq('team_id',state.team.id);
+  $("#view").innerHTML=`
+  <div class="page-head"><h1>ทีม</h1></div>
+  <div class="card" style="max-width:560px;margin-bottom:16px">
+    <div class="kv"><span class="muted">ชื่อทีม</span><b>${esc(state.team.name)}</b></div>
+    <div class="kv"><span class="muted">รหัสทีม (ส่งให้เพื่อนร่วมทีมเพื่อเข้าร่วม)</span></div>
+    <div class="row" style="margin-top:8px"><input id="teamId" value="${state.team.id}" readonly/>
+    <button class="btn-ghost btn-sm" id="copyId">คัดลอก</button></div>
+  </div>
+  <div class="card" style="max-width:560px">
+    <b>สมาชิก (${(members||[]).length})</b>
+    <div style="margin-top:10px">${(members||[]).map(m=>`
+      <div class="kv"><span>${esc(m.full_name||'—')} ${m.id===state.session.user.id?'<span class="muted">(คุณ)</span>':''}</span>
+      <span class="pill badge-pos">${esc(m.role)}</span></div>`).join('')}</div>
+  </div>`;
+  $("#copyId").onclick=()=>{navigator.clipboard.writeText(state.team.id);toast('คัดลอกรหัสทีมแล้ว');};
+}
+
+/* ============================================================
+   INIT
+   ============================================================ */
+(async()=>{ const {data}=await sb.auth.getSession(); state.session=data.session; boot(); })();
+</script>
+</body>
+</html>

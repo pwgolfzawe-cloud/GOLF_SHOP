@@ -404,10 +404,14 @@ async function renderOrders(){
   loading();
   const byCol=orderFilter.by||'paid_date';
   let q=sb.from('orders').select('*').order(byCol,{ascending:false,nullsFirst:false}).order('created_time',{ascending:false,nullsFirst:false});
-  if(orderFilter.from)q=q.gte(byCol,orderFilter.from);
-  if(orderFilter.to)q=q.lte(byCol,orderFilter.to);
-  const {data:orders}=await q.limit(1000);
-  const o=orders||[];
+  const {data:orders}=await q.limit(2000);
+  let o=orders||[];
+  // กรองช่วงวันที่แบบเห็นออเดอร์รอเงินด้วย: settled ใช้ paid_date · on-hold (ยังไม่ชำระ) ใช้ order_date แทน
+  if(orderFilter.from||orderFilter.to){
+    o=o.filter(function(r){var eff=(byCol==='paid_date'?(r.paid_date||r.order_date):(r[byCol]||r.order_date))||'';
+      if(orderFilter.from&&eff<orderFilter.from)return false;
+      if(orderFilter.to&&eff>orderFilter.to)return false;return true;});
+  }
   const payoutOf=r=>Number(r.net_profit||0)+Number(r.product_cost||0);   // จ่ายจริง = ยอดขาย − fee
   const incomeO=o.filter(r=>r.source==='income'&&Number(r.gross_sales)>0);   // เข้าเงินแล้ว (settled) ไม่นับยกเลิก
   const cancelO=o.filter(r=>(r.source==='income'||r.source==='onhold')&&Number(r.gross_sales)===0); // ยกเลิก
